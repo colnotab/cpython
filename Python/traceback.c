@@ -501,7 +501,7 @@ _Py_DisplaySourceLine(PyObject *f, PyObject *filename, int lineno, int indent)
 }
 
 static int
-tb_displayline(PyObject *f, PyObject *filename, int lineno, PyObject *name)
+tb_displayline(PyObject *f, PyObject *filename, int lineno, PyObject *col_entry, PyObject *name)
 {
     int err;
     PyObject *line;
@@ -517,8 +517,42 @@ tb_displayline(PyObject *f, PyObject *filename, int lineno, PyObject *name)
     if (err != 0)
         return err;
     /* ignore errors since we can't report them, can we? */
-    if (_Py_DisplaySourceLine(f, filename, lineno, 4))
+    if (!_Py_DisplaySourceLine(f, filename, lineno, 4)) {
+        PyObject *start_obj = PyTuple_GetItem(col_entry, 0);
+        if (!start_obj) {
+            err = 1;
+            goto error;
+        }
+        int start = PyLong_AsLong(start_obj);
+        if (start < 0) {
+            err = 1;
+            goto error;
+        }
+        PyObject *end_obj = PyTuple_GetItem(col_entry, 1);
+        if (!end_obj) {
+            err = 1;
+            goto error;
+        }
+        int end = PyLong_AsLong(end_obj);
+        if (end < 0) {
+            err = 1;
+            goto error;
+        }
+        
+        int offset = 0;
+        while (++offset <= start + 4) {
+            PyFile_WriteString(" ", f);
+        }
+        while (++offset <= end + 6) {
+            PyFile_WriteString("^", f);
+        }
+        PyFile_WriteString("\n", f);
+    }
+    else {
         PyErr_Clear();
+    }
+    
+error:
     return err;
 }
 
@@ -574,9 +608,13 @@ tb_printinternal(PyTracebackObject *tb, PyObject *f, long limit)
             cnt = 0;
         }
         cnt++;
+        PyObject *col_entry = PyTuple_GetItem(code->co_columntable, tb->tb_frame->f_lasti);
+        if (!col_entry) {
+            err = 1;
+        }
         if (err == 0 && cnt <= TB_RECURSIVE_CUTOFF) {
             err = tb_displayline(f, code->co_filename, tb->tb_lineno,
-                                 code->co_name);
+                                 col_entry, code->co_name);
             if (err == 0) {
                 err = PyErr_CheckSignals();
             }
