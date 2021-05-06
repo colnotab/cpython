@@ -352,7 +352,8 @@ _code_type = type(_write_atomic.__code__)
 #     Python 3.10b1 3437 (Undo making 'annotations' future by default - We like to dance among core devs!)
 #     Python 3.10b1 3438 Safer line number table handling.
 #     Python 3.10b1 3439 (Add ROT_N)
-
+#     Python 3.11a0 3440 (col_offset/end_col_offset to bytecode instructions)
+#
 #
 # MAGIC must change whenever the bytecode emitted by the compiler may no
 # longer be understood by older implementations of the eval loop (usually

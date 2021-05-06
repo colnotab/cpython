@@ -37,6 +37,7 @@
 #define DEFAULT_BLOCKS 8
 #define DEFAULT_CODE_SIZE 128
 #define DEFAULT_LNOTAB_SIZE 16
+#define DEFAULT_CNOTAB_SIZE 0
 
 #define COMP_GENEXP   0
 #define COMP_LISTCOMP 1
@@ -5307,10 +5308,12 @@ compiler_visit_expr(struct compiler *c, expr_ty e)
 {
     int old_lineno = c->u->u_lineno;
     int old_col_offset = c->u->u_col_offset;
+    int old_end_col_offset = c->u->u_end_col_offset;
     SET_LOC(c, e);
     int res = compiler_visit_expr1(c, e);
     c->u->u_lineno = old_lineno;
     c->u->u_col_offset = old_col_offset;
+    c->u->u_end_col_offset = old_end_col_offset;
     return res;
 }
 
@@ -6396,7 +6399,7 @@ struct assembler {
     int a_offset;              /* offset into bytecode */
     int a_nblocks;             /* number of reachable blocks */
     PyObject *a_lnotab;    /* string containing lnotab */
-    PyObject *a_coltab;
+    PyObject *a_cnotab;
     int a_lnotab_off;      /* offset into lnotab */
     int a_prevlineno;     /* lineno of last emitted line in line table */
     int a_lineno;          /* lineno of last emitted instruction */
@@ -6498,7 +6501,7 @@ assemble_init(struct assembler *a, int nblocks, int firstlineno)
     memset(a, 0, sizeof(struct assembler));
     a->a_prevlineno = a->a_lineno = firstlineno;
     a->a_lnotab = NULL;
-    a->a_coltab = NULL;
+    a->a_cnotab = NULL;
     a->a_bytecode = PyBytes_FromStringAndSize(NULL, DEFAULT_CODE_SIZE);
     if (a->a_bytecode == NULL) {
         goto error;
@@ -6507,8 +6510,8 @@ assemble_init(struct assembler *a, int nblocks, int firstlineno)
     if (a->a_lnotab == NULL) {
         goto error;
     }
-    a->a_coltab = PyList_New(0);
-    if (a->a_coltab == NULL) {
+    a->a_cnotab = PyBytes_FromStringAndSize(NULL, DEFAULT_CNOTAB_SIZE);
+    if (a->a_cnotab == NULL) {
         goto error;
     }
     if ((size_t)nblocks > SIZE_MAX / sizeof(basicblock *)) {
@@ -6519,7 +6522,7 @@ assemble_init(struct assembler *a, int nblocks, int firstlineno)
 error:
     Py_XDECREF(a->a_bytecode);
     Py_XDECREF(a->a_lnotab);
-    Py_XDECREF(a->a_coltab);
+    Py_XDECREF(a->a_cnotab);
     return 0;
 }
 
@@ -6528,7 +6531,7 @@ assemble_free(struct assembler *a)
 {
     Py_XDECREF(a->a_bytecode);
     Py_XDECREF(a->a_lnotab);
-    Py_XDECREF(a->a_coltab);
+    Py_XDECREF(a->a_cnotab);
 }
 
 static int
@@ -6619,14 +6622,22 @@ assemble_lnotab(struct assembler *a, struct instr *i)
 static int
 assemble_coltab(struct assembler *a, struct instr *i)
 {
-    PyObject *entry = PyTuple_New(2);
-    if (!entry) {
+    Py_ssize_t len = PyBytes_GET_SIZE(a->a_cnotab);
+    if (_PyBytes_Resize(&a->a_cnotab, len + 2) < 0) {
         return 0;
     }
-    PyTuple_SET_ITEM(entry, 0, PyLong_FromLong(i->i_col_offset));
-    PyTuple_SET_ITEM(entry, 1, PyLong_FromLong(i->i_end_col_offset));
-    PyList_Append(a->a_coltab, entry);
-    Py_DECREF(entry);
+    
+    unsigned char *cnotab = (unsigned char *)PyBytes_AS_STRING(a->a_cnotab);
+    cnotab += len;
+    
+    if (i->i_col_offset > 255 || i->i_end_col_offset - i->i_col_offset > 255) {
+        *cnotab++ = 0;
+        *cnotab++ = 0;
+    } else {
+        *cnotab++ = i->i_col_offset;
+        *cnotab++ = i->i_end_col_offset - i->i_col_offset;
+    }
+
     return 1;
 }
 
@@ -6833,7 +6844,6 @@ makecode(struct compiler *c, struct assembler *a, PyObject *consts)
     PyObject *name = NULL;
     PyObject *freevars = NULL;
     PyObject *cellvars = NULL;
-    PyObject *coltab = NULL;
     Py_ssize_t nlocals;
     int nlocals_int;
     int flags;
@@ -6875,10 +6885,6 @@ makecode(struct compiler *c, struct assembler *a, PyObject *consts)
         Py_DECREF(consts);
         goto error;
     }
-    coltab = PyList_AsTuple(a->a_coltab);
-    if (!coltab) {
-        goto error;
-    }
 
     posonlyargcount = Py_SAFE_DOWNCAST(c->u->u_posonlyargcount, Py_ssize_t, int);
     posorkeywordargcount = Py_SAFE_DOWNCAST(c->u->u_argcount, Py_ssize_t, int);
@@ -6900,7 +6906,7 @@ makecode(struct compiler *c, struct assembler *a, PyObject *consts)
                                    maxdepth, flags, a->a_bytecode, consts, names,
                                    varnames, freevars, cellvars, c->c_filename,
                                    c->u->u_name, c->u->u_firstlineno, a->a_lnotab,
-                                   coltab);
+                                   a->a_cnotab);
     Py_DECREF(consts);
  error:
     Py_XDECREF(names);
@@ -6908,7 +6914,6 @@ makecode(struct compiler *c, struct assembler *a, PyObject *consts)
     Py_XDECREF(name);
     Py_XDECREF(freevars);
     Py_XDECREF(cellvars);
-    Py_XDECREF(coltab);
     return co;
 }
 

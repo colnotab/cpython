@@ -369,7 +369,7 @@ finally:
 }
 
 int
-_Py_DisplaySourceLine(PyObject *f, PyObject *filename, int lineno, int indent)
+_Py_DisplaySourceLine(PyObject *f, PyObject *filename, int lineno, int indent, int *truncation)
 {
     int err = 0;
     int fd;
@@ -469,6 +469,9 @@ _Py_DisplaySourceLine(PyObject *f, PyObject *filename, int lineno, int indent)
             break;
     }
     if (i) {
+        if (truncation != NULL) {
+            *truncation = i - indent;
+        }
         PyObject *truncated;
         truncated = PyUnicode_Substring(lineobj, i, PyUnicode_GET_LENGTH(lineobj));
         if (truncated) {
@@ -500,8 +503,11 @@ _Py_DisplaySourceLine(PyObject *f, PyObject *filename, int lineno, int indent)
     return err;
 }
 
+#define _TRACEBACK_SOURCE_LINE_INDENT 4
+
 static int
-tb_displayline(PyObject *f, PyObject *filename, int lineno, PyObject *col_entry, PyObject *name)
+tb_displayline(PyObject *f, PyObject *filename, int lineno,
+               PyObject *co_cnotab, int last_i, PyObject *name)
 {
     int err;
     PyObject *line;
@@ -516,37 +522,34 @@ tb_displayline(PyObject *f, PyObject *filename, int lineno, PyObject *col_entry,
     Py_DECREF(line);
     if (err != 0)
         return err;
+    
+    int truncation = _TRACEBACK_SOURCE_LINE_INDENT;
     /* ignore errors since we can't report them, can we? */
-    if (!_Py_DisplaySourceLine(f, filename, lineno, 4)) {
-        PyObject *start_obj = PyTuple_GetItem(col_entry, 0);
-        if (!start_obj) {
-            err = 1;
-            goto error;
+    if (!_Py_DisplaySourceLine(f, filename, lineno, _TRACEBACK_SOURCE_LINE_INDENT, &truncation)) {
+        if (PyBytes_GET_SIZE(co_cnotab) > last_i * 2) {
+            // WIP
+            char *cnotab = PyBytes_AsString(co_cnotab);
+            if (!cnotab) {
+                err = -1;
+                goto error;
+            }
+            char start = cnotab[last_i * 2] + truncation;
+            char end = cnotab[last_i * 2 + 1] + start;
+            char offset = 0;
+            while (++offset <= start) {
+                err = PyFile_WriteString(" ", f);
+                if (err < 0) {
+                    goto error;
+                }
+            }
+            while (++offset <= end + 1) {
+                err = PyFile_WriteString("^", f);
+                if (err < 0) {
+                    goto error;
+                }
+            }
+            err = PyFile_WriteString("\n", f);
         }
-        int start = PyLong_AsLong(start_obj);
-        if (start < 0) {
-            err = 1;
-            goto error;
-        }
-        PyObject *end_obj = PyTuple_GetItem(col_entry, 1);
-        if (!end_obj) {
-            err = 1;
-            goto error;
-        }
-        int end = PyLong_AsLong(end_obj);
-        if (end < 0) {
-            err = 1;
-            goto error;
-        }
-        
-        int offset = 0;
-        while (++offset <= start + 4) {
-            PyFile_WriteString(" ", f);
-        }
-        while (++offset <= end + 6) {
-            PyFile_WriteString("^", f);
-        }
-        PyFile_WriteString("\n", f);
     }
     else {
         PyErr_Clear();
@@ -608,13 +611,9 @@ tb_printinternal(PyTracebackObject *tb, PyObject *f, long limit)
             cnt = 0;
         }
         cnt++;
-        PyObject *col_entry = PyTuple_GetItem(code->co_columntable, tb->tb_frame->f_lasti);
-        if (!col_entry) {
-            err = 1;
-        }
         if (err == 0 && cnt <= TB_RECURSIVE_CUTOFF) {
             err = tb_displayline(f, code->co_filename, tb->tb_lineno,
-                                 col_entry, code->co_name);
+                                 code->co_cnotab, tb->tb_frame->f_lasti, code->co_name);
             if (err == 0) {
                 err = PyErr_CheckSignals();
             }
