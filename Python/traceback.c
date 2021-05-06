@@ -531,21 +531,28 @@ tb_displayline(PyObject *f, PyObject *filename, int lineno,
             char *cnotab = PyBytes_AsString(co_cnotab);
             if (!cnotab) {
                 err = -1;
-                goto error;
+                goto done;
             }
-            char start = cnotab[last_i * 2] + truncation;
-            char end = cnotab[last_i * 2 + 1] + start;
-            char offset = 0;
-            while (++offset <= start) {
+            char start = cnotab[last_i * 2];
+            if (start == 0) {
+                goto done;
+            }
+            char end = cnotab[last_i * 2 + 1];
+            if (end == 0) {
+                // TODO: highlight until the line is over
+                goto done;
+            }
+            char offset = -truncation;
+            while (++offset <= start - 1) {
                 err = PyFile_WriteString(" ", f);
                 if (err < 0) {
-                    goto error;
+                    goto done;
                 }
             }
-            while (++offset <= end + 1) {
+            while (++offset <= end) {
                 err = PyFile_WriteString("^", f);
                 if (err < 0) {
-                    goto error;
+                    goto done;
                 }
             }
             err = PyFile_WriteString("\n", f);
@@ -555,7 +562,7 @@ tb_displayline(PyObject *f, PyObject *filename, int lineno,
         PyErr_Clear();
     }
     
-error:
+done:
     return err;
 }
 

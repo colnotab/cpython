@@ -77,6 +77,7 @@ struct instr {
     int i_oparg;
     struct basicblock_ *i_target; /* target block (if jump instruction) */
     int i_lineno;
+    int i_end_lineno;
     int i_col_offset;
     int i_end_col_offset;
 };
@@ -1236,7 +1237,7 @@ PyCompile_OpcodeStackEffect(int opcode, int oparg)
 */
 
 static int
-compiler_addop_line(struct compiler *c, int opcode, int line, int col_offset, int end_col_offset)
+compiler_addop_line(struct compiler *c, int opcode, int line, int end_line, int col_offset, int end_col_offset)
 {
     basicblock *b;
     struct instr *i;
@@ -1252,6 +1253,7 @@ compiler_addop_line(struct compiler *c, int opcode, int line, int col_offset, in
     if (opcode == RETURN_VALUE)
         b->b_return = 1;
     i->i_lineno = line;
+    i->i_end_lineno = end_line;
     i->i_col_offset = col_offset;
     i->i_end_col_offset = end_col_offset;
     return 1;
@@ -1260,13 +1262,14 @@ compiler_addop_line(struct compiler *c, int opcode, int line, int col_offset, in
 static int
 compiler_addop(struct compiler *c, int opcode)
 {
-    return compiler_addop_line(c, opcode, c->u->u_lineno, c->u->u_col_offset, c->u->u_end_col_offset);
+    return compiler_addop_line(c, opcode, c->u->u_lineno, c->u->u_end_lineno,
+                               c->u->u_col_offset, c->u->u_end_col_offset);
 }
 
 static int
 compiler_addop_noline(struct compiler *c, int opcode)
 {
-    return compiler_addop_line(c, opcode, -1, 0, 0);
+    return compiler_addop_line(c, opcode, -1, 0, 0, 0);
 }
 
 
@@ -1460,7 +1463,8 @@ compiler_addop_name(struct compiler *c, int opcode, PyObject *dict,
 */
 
 static int
-compiler_addop_i_line(struct compiler *c, int opcode, Py_ssize_t oparg, int lineno, int col_offset, int end_col_offset)
+compiler_addop_i_line(struct compiler *c, int opcode, Py_ssize_t oparg, int lineno,
+                      int end_lineno, int col_offset, int end_col_offset)
 {
     struct instr *i;
     int off;
@@ -1482,6 +1486,7 @@ compiler_addop_i_line(struct compiler *c, int opcode, Py_ssize_t oparg, int line
     i->i_opcode = opcode;
     i->i_oparg = Py_SAFE_DOWNCAST(oparg, Py_ssize_t, int);
     i->i_lineno = lineno;
+    i->i_end_lineno = end_lineno;
     i->i_col_offset = col_offset;
     i->i_end_col_offset = end_col_offset;
     return 1;
@@ -1490,16 +1495,18 @@ compiler_addop_i_line(struct compiler *c, int opcode, Py_ssize_t oparg, int line
 static int
 compiler_addop_i(struct compiler *c, int opcode, Py_ssize_t oparg)
 {
-    return compiler_addop_i_line(c, opcode, oparg, c->u->u_lineno, c->u->u_col_offset, c->u->u_end_col_offset);
+    return compiler_addop_i_line(c, opcode, oparg, c->u->u_lineno, c->u->u_end_lineno,
+                                 c->u->u_col_offset, c->u->u_end_col_offset);
 }
 
 static int
 compiler_addop_i_noline(struct compiler *c, int opcode, Py_ssize_t oparg)
 {
-    return compiler_addop_i_line(c, opcode, oparg, -1, 0, 0);
+    return compiler_addop_i_line(c, opcode, oparg, -1, 0, 0, 0);
 }
 
-static int add_jump_to_block(basicblock *b, int opcode, int lineno, int col_offset, int end_col_offset, basicblock *target)
+static int add_jump_to_block(basicblock *b, int opcode, int lineno, int end_lineno,
+                             int col_offset, int end_col_offset, basicblock *target)
 {
     assert(HAS_ARG(opcode));
     assert(b != NULL);
@@ -1513,6 +1520,7 @@ static int add_jump_to_block(basicblock *b, int opcode, int lineno, int col_offs
     i->i_opcode = opcode;
     i->i_target = target;
     i->i_lineno = lineno;
+    i->i_end_lineno = end_lineno;
     i->i_col_offset = col_offset;
     i->i_end_col_offset = end_col_offset;
     return 1;
@@ -1521,13 +1529,14 @@ static int add_jump_to_block(basicblock *b, int opcode, int lineno, int col_offs
 static int
 compiler_addop_j(struct compiler *c, int opcode, basicblock *b)
 {
-    return add_jump_to_block(c->u->u_curblock, opcode, c->u->u_lineno, c->u->u_col_offset, c->u->u_end_col_offset, b);
+    return add_jump_to_block(c->u->u_curblock, opcode, c->u->u_lineno, c->u->u_end_lineno,
+                             c->u->u_col_offset, c->u->u_end_col_offset, b);
 }
 
 static int
 compiler_addop_j_noline(struct compiler *c, int opcode, basicblock *b)
 {
-    return add_jump_to_block(c->u->u_curblock, opcode, -1, 0, 0, b);
+    return add_jump_to_block(c->u->u_curblock, opcode, -1, 0, 0, 0, b);
 }
 
 /* NEXT_BLOCK() creates an implicit jump from the current block
@@ -3469,7 +3478,6 @@ compiler_visit_stmt_expr(struct compiler *c, expr_ty value)
 {
     if (c->c_interactive && c->c_nestlevel <= 1) {
         VISIT(c, expr, value);
-        printf("N: %d-%d\n", c->u->u_col_offset, c->u->u_end_col_offset);
         ADDOP(c, PRINT_EXPR);
         return 1;
     }
@@ -5307,11 +5315,13 @@ static int
 compiler_visit_expr(struct compiler *c, expr_ty e)
 {
     int old_lineno = c->u->u_lineno;
+    int old_end_lineno = c->u->u_end_lineno;
     int old_col_offset = c->u->u_col_offset;
     int old_end_col_offset = c->u->u_end_col_offset;
     SET_LOC(c, e);
     int res = compiler_visit_expr1(c, e);
     c->u->u_lineno = old_lineno;
+    c->u->u_end_lineno = old_end_lineno;
     c->u->u_col_offset = old_col_offset;
     c->u->u_end_col_offset = old_end_col_offset;
     return res;
@@ -6620,9 +6630,10 @@ assemble_lnotab(struct assembler *a, struct instr *i)
 }
 
 static int
-assemble_coltab(struct assembler *a, struct instr *i)
+assemble_cnotab(struct assembler *a, struct instr *i)
 {
     Py_ssize_t len = PyBytes_GET_SIZE(a->a_cnotab);
+    // TODO: allocate more and re-use it if possible
     if (_PyBytes_Resize(&a->a_cnotab, len + 2) < 0) {
         return 0;
     }
@@ -6630,12 +6641,18 @@ assemble_coltab(struct assembler *a, struct instr *i)
     unsigned char *cnotab = (unsigned char *)PyBytes_AS_STRING(a->a_cnotab);
     cnotab += len;
     
-    if (i->i_col_offset > 255 || i->i_end_col_offset - i->i_col_offset > 255) {
+    if (i->i_col_offset > 255 || i->i_col_offset > 255) {
         *cnotab++ = 0;
+        *cnotab++ = 0;
+        return 1;
+    } else {
+        *cnotab++ = i->i_col_offset + 1;
+    }
+
+    if (i->i_lineno != i->i_end_lineno) {
         *cnotab++ = 0;
     } else {
-        *cnotab++ = i->i_col_offset;
-        *cnotab++ = i->i_end_col_offset - i->i_col_offset;
+        *cnotab++ = i->i_end_col_offset + 1;
     }
 
     return 1;
@@ -6657,7 +6674,7 @@ assemble_emit(struct assembler *a, struct instr *i)
     size = instrsize(arg);
     if (i->i_lineno && !assemble_lnotab(a, i))
         return 0;
-    if (!assemble_coltab(a, i))
+    if (!assemble_cnotab(a, i))
         return 0;
     if (a->a_offset + size >= len / (int)sizeof(_Py_CODEUNIT)) {
         if (len > PY_SSIZE_T_MAX / 2)
@@ -7201,9 +7218,10 @@ eliminate_jump_to_jump(basicblock *bb, int opcode) {
         return 0;
     }
     int lineno = target->i_lineno;
+    int end_lineno = target->i_end_lineno;
     int col_offset = target->i_col_offset;
     int end_col_offset = target->i_end_col_offset;
-    if (add_jump_to_block(bb, opcode, lineno, col_offset, end_col_offset, target->i_target) == 0) {
+    if (add_jump_to_block(bb, opcode, lineno, end_lineno, col_offset, end_col_offset, target->i_target) == 0) {
         return -1;
     }
     assert (bb->b_iused >= 2);
