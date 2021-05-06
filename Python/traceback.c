@@ -469,9 +469,6 @@ _Py_DisplaySourceLine(PyObject *f, PyObject *filename, int lineno, int indent, i
             break;
     }
     if (i) {
-        if (truncation != NULL) {
-            *truncation = i - indent;
-        }
         PyObject *truncated;
         truncated = PyUnicode_Substring(lineobj, i, PyUnicode_GET_LENGTH(lineobj));
         if (truncated) {
@@ -480,6 +477,10 @@ _Py_DisplaySourceLine(PyObject *f, PyObject *filename, int lineno, int indent, i
         } else {
             PyErr_Clear();
         }
+    }
+
+    if (truncation != NULL) {
+        *truncation = i - indent;
     }
 
     /* Write some spaces before the line */
@@ -542,7 +543,7 @@ tb_displayline(PyObject *f, PyObject *filename, int lineno,
                 // TODO: highlight until the line is over
                 goto done;
             }
-            char offset = -truncation;
+            char offset = truncation;
             while (++offset <= start - 1) {
                 err = PyFile_WriteString(" ", f);
                 if (err < 0) {
