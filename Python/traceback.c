@@ -529,16 +529,16 @@ tb_displayline(PyObject *f, PyObject *filename, int lineno,
     if (!_Py_DisplaySourceLine(f, filename, lineno, _TRACEBACK_SOURCE_LINE_INDENT, &truncation)) {
         if (PyBytes_GET_SIZE(co_cnotab) > last_i * 2) {
             // WIP
-            char *cnotab = PyBytes_AsString(co_cnotab);
+            uint8_t *cnotab = PyBytes_AsString(co_cnotab);
             if (!cnotab) {
                 err = -1;
                 goto done;
             }
-            char start = cnotab[last_i * 2];
+            uint8_t start = cnotab[last_i * 2];
             if (start == 0) {
                 goto done;
             }
-            char end = cnotab[last_i * 2 + 1];
+            uint8_t end = cnotab[last_i * 2 + 1];
             if (end == 0) {
                 // TODO: highlight until the line is over
                 goto done;
