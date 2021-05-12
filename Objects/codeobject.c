@@ -138,7 +138,7 @@ PyCode_NewWithPosOnlyArgs(int argcount, int posonlyargcount, int kwonlyargcount,
         name == NULL || !PyUnicode_Check(name) ||
         filename == NULL || !PyUnicode_Check(filename) ||
         linetable == NULL || !PyBytes_Check(linetable) ||
-        cnotab == NULL || !PyBytes_Check(cnotab)) {
+        cnotab == NULL || (cnotab != Py_None && !PyBytes_Check(cnotab))) {
         PyErr_BadInternalCall();
         return NULL;
     }
@@ -174,12 +174,12 @@ PyCode_NewWithPosOnlyArgs(int argcount, int posonlyargcount, int kwonlyargcount,
         PyErr_SetString(PyExc_OverflowError, "co_code larger than INT_MAX");
         return NULL;
     }
-    
+
     /* It is very unlikely that the co_cnotab will overflow
        but not the co_code, but for ensuring we are going to be
        able to properly reference these in the tracebacks this
        check asserts the same assumption. */
-    if (PyBytes_GET_SIZE(cnotab) > INT_MAX) {
+    if (cnotab != Py_None && PyBytes_GET_SIZE(cnotab) > INT_MAX) {
         PyErr_SetString(PyExc_OverflowError, "co_cnotab larger than INT_MAX");
         return NULL;
     }
