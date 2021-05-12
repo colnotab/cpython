@@ -140,6 +140,9 @@ PyCode_NewEmpty(const char *filename, const char *funcname, int firstlineno);
    in this code object.  If you just need the line number of a frame,
    use PyFrame_GetLineNumber() instead. */
 PyAPI_FUNC(int) PyCode_Addr2Line(PyCodeObject *, int);
+PyAPI_FUNC(int) PyCode_Addr2EndLine(PyCodeObject *, int);
+PyAPI_FUNC(int) PyCode_Addr2Offset(PyCodeObject *, int);
+PyAPI_FUNC(int) PyCode_Addr2EndOffset(PyCodeObject *, int);
 
 /* for internal use only */
 struct _opaque {
@@ -180,6 +183,7 @@ PyAPI_FUNC(int) _PyCode_SetExtra(PyObject *code, Py_ssize_t index,
 
 /** API for initializing the line number table. */
 int _PyCode_InitAddressRange(PyCodeObject* co, PyCodeAddressRange *bounds);
+int _PyCode_InitEndAddressRange(PyCodeObject* co, PyCodeAddressRange *bounds);
 
 /** Out of process API for initializing the line number table. */
 void PyLineTable_InitAddressRange(char *linetable, Py_ssize_t length, int firstlineno, PyCodeAddressRange *range);

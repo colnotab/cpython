@@ -1150,6 +1150,147 @@ code_linesiterator(PyCodeObject *code, PyObject *Py_UNUSED(args))
     return (PyObject *)li;
 }
 
+typedef struct {
+    PyObject_HEAD
+    PyCodeObject *pi_code;
+    int pi_offset;
+} positionsiterator;
+
+
+static void
+positionsiter_dealloc(positionsiterator *pi)
+{
+    Py_DECREF(pi->pi_code);
+    Py_TYPE(pi)->tp_free(pi);
+}
+
+static PyObject *
+positionsiter_next(positionsiterator *pi)
+{
+    PyObject *result = PyTuple_New(4);
+    if (!result) {
+        return NULL;
+    }
+    if (pi->pi_offset >= PyBytes_GET_SIZE(pi->pi_code->co_code)) {
+        return NULL;
+    }
+
+    PyObject *start_line = NULL;
+    PyObject *end_line = NULL;
+    PyObject *start_col = NULL;
+    PyObject *end_col = NULL;
+
+    int loc = PyCode_Addr2Line(pi->pi_code, pi->pi_offset);
+    if (loc < 0) {
+        PyErr_Format(PyExc_ValueError, "no");
+        goto error;
+    }
+    start_line = PyLong_FromLong(loc);
+    if (!start_line) {
+        goto error;
+    }
+
+    loc = PyCode_Addr2EndLine(pi->pi_code, pi->pi_offset);
+    if (loc < 0) {
+        PyErr_Format(PyExc_ValueError, "no");
+        goto error;
+    }
+    end_line = PyLong_FromLong(loc);
+    if (!end_line) {
+        goto error;
+    }
+
+    loc = PyCode_Addr2Offset(pi->pi_code, pi->pi_offset);
+    if (loc < 0) {
+        PyErr_Format(PyExc_ValueError, "no");
+        goto error;
+    }
+    start_col = PyLong_FromLong(loc);
+    if (!start_col) {
+        goto error;
+    }
+
+    loc = PyCode_Addr2EndOffset(pi->pi_code, pi->pi_offset);
+    if (loc < 0) {
+        PyErr_Format(PyExc_ValueError, "no");
+        goto error;
+    }
+    end_col = PyLong_FromLong(loc);
+    if (!end_col) {
+        goto error;
+    }
+
+    pi->pi_offset += 2;
+    PyTuple_SET_ITEM(result, 0, start_line);
+    PyTuple_SET_ITEM(result, 1, end_line);
+    PyTuple_SET_ITEM(result, 2, start_col);
+    PyTuple_SET_ITEM(result, 3, end_col);
+    return result;
+
+error:
+    Py_XDECREF(start_line);
+    Py_XDECREF(end_line);
+    Py_XDECREF(start_col);
+    Py_XDECREF(end_col);
+    return result;
+}
+
+static PyTypeObject PositionsIterator = {
+    PyVarObject_HEAD_INIT(&PyType_Type, 0)
+    "poisitions_iterator",              /* tp_name */
+    sizeof(positionsiterator),          /* tp_basicsize */
+    0,                                  /* tp_itemsize */
+    /* methods */
+    (destructor)positionsiter_dealloc,  /* tp_dealloc */
+    0,                                  /* tp_vectorcall_offset */
+    0,                                  /* tp_getattr */
+    0,                                  /* tp_setattr */
+    0,                                  /* tp_as_async */
+    0,                                  /* tp_repr */
+    0,                                  /* tp_as_number */
+    0,                                  /* tp_as_sequence */
+    0,                                  /* tp_as_mapping */
+    0,                                  /* tp_hash */
+    0,                                  /* tp_call */
+    0,                                  /* tp_str */
+    0,                                  /* tp_getattro */
+    0,                                  /* tp_setattro */
+    0,                                  /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,       /* tp_flags */
+    0,                                  /* tp_doc */
+    0,                                  /* tp_traverse */
+    0,                                  /* tp_clear */
+    0,                                  /* tp_richcompare */
+    0,                                  /* tp_weaklistoffset */
+    PyObject_SelfIter,                  /* tp_iter */
+    (iternextfunc)positionsiter_next,   /* tp_iternext */
+    0,                                  /* tp_methods */
+    0,                                  /* tp_members */
+    0,                                  /* tp_getset */
+    0,                                  /* tp_base */
+    0,                                  /* tp_dict */
+    0,                                  /* tp_descr_get */
+    0,                                  /* tp_descr_set */
+    0,                                  /* tp_dictoffset */
+    0,                                  /* tp_init */
+    0,                                  /* tp_alloc */
+    0,                                  /* tp_new */
+    PyObject_Del,                       /* tp_free */
+};
+
+static PyObject *
+code_positionsiterator(PyCodeObject *code, PyObject *Py_UNUSED(args))
+{
+    positionsiterator *pi = (positionsiterator *)PyType_GenericAlloc(&PositionsIterator, 0);
+    if (pi == NULL) {
+        return NULL;
+    }
+    Py_INCREF(code);
+    pi->pi_code = code;
+    pi->pi_offset = 0;
+    return (PyObject *)pi;
+}
+
 static void
 retreat(PyCodeAddressRange *bounds)
 {
@@ -1226,6 +1367,7 @@ PyLineTable_NextAddressRange(PyCodeAddressRange *range)
 static struct PyMethodDef code_methods[] = {
     {"__sizeof__", (PyCFunction)code_sizeof, METH_NOARGS},
     {"co_lines", (PyCFunction)code_linesiterator, METH_NOARGS},
+    {"co_positions", (PyCFunction)code_positionsiterator, METH_NOARGS},
     CODE_REPLACE_METHODDEF
     {NULL, NULL}                /* sentinel */
 };
@@ -1287,6 +1429,52 @@ PyCode_Addr2Line(PyCodeObject *co, int addrq)
     return _PyCode_CheckLineNumber(addrq, &bounds);
 }
 
+int
+PyCode_Addr2EndLine(PyCodeObject *co, int addrq)
+{
+    if (addrq < 0) {
+        return co->co_firstlineno;
+    }
+    assert(addrq >= 0 && addrq < PyBytes_GET_SIZE(co->co_code));
+    PyCodeAddressRange bounds;
+    _PyCode_InitEndAddressRange(co, &bounds);
+    return _PyCode_CheckLineNumber(addrq, &bounds);
+}
+
+int
+PyCode_Addr2Offset(PyCodeObject *co, int addrq)
+{
+    int size = PyBytes_GET_SIZE(co->co_code);
+    if (addrq >= size) {
+        return -1;
+    }
+
+    if (addrq % 2 == 1) {
+        --addrq;
+    }
+    printf("addrq: %d\n", addrq);
+
+
+    unsigned char *bytes = (unsigned char *)PyBytes_AS_STRING(co->co_cnotab);
+    return bytes[addrq];
+}
+
+int
+PyCode_Addr2EndOffset(PyCodeObject *co, int addrq)
+{
+    Py_ssize_t size = PyBytes_Size(co->co_code);
+    if (addrq >= size) {
+        return -1;
+    }
+
+    if (addrq % 2 == 0) {
+        ++addrq;
+    }
+
+    unsigned char *bytes = (unsigned char *)PyBytes_AS_STRING(co->co_cnotab);
+    return bytes[addrq];
+}
+
 void
 PyLineTable_InitAddressRange(char *linetable, Py_ssize_t length, int firstlineno, PyCodeAddressRange *range)
 {
@@ -1303,6 +1491,15 @@ _PyCode_InitAddressRange(PyCodeObject* co, PyCodeAddressRange *bounds)
 {
     char *linetable = PyBytes_AS_STRING(co->co_linetable);
     Py_ssize_t length = PyBytes_GET_SIZE(co->co_linetable);
+    PyLineTable_InitAddressRange(linetable, length, co->co_firstlineno, bounds);
+    return bounds->ar_line;
+}
+
+int
+_PyCode_InitEndAddressRange(PyCodeObject* co, PyCodeAddressRange *bounds)
+{
+    char *linetable = PyBytes_AS_STRING(co->co_enotab);
+    Py_ssize_t length = PyBytes_GET_SIZE(co->co_enotab);
     PyLineTable_InitAddressRange(linetable, length, co->co_firstlineno, bounds);
     return bounds->ar_line;
 }
