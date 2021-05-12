@@ -6961,12 +6961,25 @@ makecode(struct compiler *c, struct assembler *a, PyObject *consts)
         Py_DECREF(consts);
         goto error;
     }
+
+    // Prepare the enotab and cnotab argument
+    PyObject* cnotab = a->a_cnotab;
+    PyObject* enotab = a->a_enotab;
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyInterpreterState *interp = tstate->interp;
+    if(_PyInterpreterState_GetConfig(interp)->deactivate_debug_ranges) {
+        cnotab = Py_None;
+        Py_INCREF(cnotab);
+        enotab = Py_None;
+        Py_INCREF(enotab);
+    }
+
     co = PyCode_NewWithPosOnlyArgs(posonlyargcount+posorkeywordargcount,
                                    posonlyargcount, kwonlyargcount, nlocals_int,
                                    maxdepth, flags, a->a_bytecode, consts, names,
                                    varnames, freevars, cellvars, c->c_filename,
                                    c->u->u_name, c->u->u_firstlineno, a->a_lnotab,
-                                   a->a_enotab, a->a_cnotab);
+                                   enotab, cnotab);
     Py_DECREF(consts);
  error:
     Py_XDECREF(names);
