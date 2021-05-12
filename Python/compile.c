@@ -1785,7 +1785,7 @@ static int
 compiler_unwind_fblock(struct compiler *c, struct fblockinfo *info,
                        int preserve_tos)
 {
-    int loc;
+    int start_loc, end_loc;
     switch (info->fb_type) {
         case WHILE_LOOP:
         case EXCEPTION_HANDLER:
@@ -1838,7 +1838,8 @@ compiler_unwind_fblock(struct compiler *c, struct fblockinfo *info,
 
         case WITH:
         case ASYNC_WITH:
-            loc = c->u->u_lineno;
+            start_loc = c->u->u_lineno;
+            end_loc = c->u->u_end_lineno;
             SET_LOC(c, (stmt_ty)info->fb_datum);
             ADDOP(c, POP_BLOCK);
             if (preserve_tos) {
@@ -1853,7 +1854,8 @@ compiler_unwind_fblock(struct compiler *c, struct fblockinfo *info,
                 ADDOP(c, YIELD_FROM);
             }
             ADDOP(c, POP_TOP);
-            c->u->u_lineno = loc;
+            c->u->u_lineno = start_loc;
+            c->u->u_end_lineno = end_loc;
             return 1;
 
         case HANDLER_CLEANUP:
@@ -6408,12 +6410,17 @@ struct assembler {
     PyObject *a_bytecode;  /* string containing bytecode */
     int a_offset;              /* offset into bytecode */
     int a_nblocks;             /* number of reachable blocks */
-    PyObject *a_lnotab;    /* string containing lnotab */
-    PyObject *a_cnotab;
-    int a_lnotab_off;      /* offset into lnotab */
-    int a_prevlineno;     /* lineno of last emitted line in line table */
-    int a_lineno;          /* lineno of last emitted instruction */
-    int a_lineno_start;    /* bytecode start offset of current lineno */
+    PyObject *a_lnotab;     /* string containing lnotab */
+    PyObject *a_enotab;     /* string containing enotab */
+    PyObject *a_cnotab;     /* string containing cnotab */
+    int a_lnotab_off;       /* offset into lnotab */
+    int a_enotab_off;       /* offset into enotab */
+    int a_prevlineno;       /* lineno of last emitted line in line table */
+    int a_prev_end_lineno;  /* end_lineno of last emitted line in line table */
+    int a_lineno;           /* lineno of last emitted instruction */
+    int a_end_lineno;       /* end_lineno of last emitted instruction */
+    int a_lineno_start;     /* bytecode start offset of current lineno */
+    int a_end_lineno_start; /* bytecode start offset of current end_lineno */
     basicblock *a_entry;
 };
 
@@ -6510,7 +6517,9 @@ assemble_init(struct assembler *a, int nblocks, int firstlineno)
 {
     memset(a, 0, sizeof(struct assembler));
     a->a_prevlineno = a->a_lineno = firstlineno;
+    a->a_prev_end_lineno = a->a_end_lineno = firstlineno;
     a->a_lnotab = NULL;
+    a->a_enotab = NULL;
     a->a_cnotab = NULL;
     a->a_bytecode = PyBytes_FromStringAndSize(NULL, DEFAULT_CODE_SIZE);
     if (a->a_bytecode == NULL) {
@@ -6518,6 +6527,10 @@ assemble_init(struct assembler *a, int nblocks, int firstlineno)
     }
     a->a_lnotab = PyBytes_FromStringAndSize(NULL, DEFAULT_LNOTAB_SIZE);
     if (a->a_lnotab == NULL) {
+        goto error;
+    }
+    a->a_enotab = PyBytes_FromStringAndSize(NULL, DEFAULT_LNOTAB_SIZE);
+    if (a->a_enotab == NULL) {
         goto error;
     }
     a->a_cnotab = PyBytes_FromStringAndSize(NULL, DEFAULT_CNOTAB_SIZE);
@@ -6532,6 +6545,7 @@ assemble_init(struct assembler *a, int nblocks, int firstlineno)
 error:
     Py_XDECREF(a->a_bytecode);
     Py_XDECREF(a->a_lnotab);
+    Py_XDECREF(a->a_enotab);
     Py_XDECREF(a->a_cnotab);
     return 0;
 }
@@ -6541,6 +6555,7 @@ assemble_free(struct assembler *a)
 {
     Py_XDECREF(a->a_bytecode);
     Py_XDECREF(a->a_lnotab);
+    Py_XDECREF(a->a_enotab);
     Py_XDECREF(a->a_cnotab);
 }
 
@@ -6556,18 +6571,20 @@ blocksize(basicblock *b)
 }
 
 static int
-assemble_emit_linetable_pair(struct assembler *a, int bdelta, int ldelta)
+assemble_emit_table_pair(struct assembler *a, PyObject **table, int *offset, int left, int right)
 {
-    Py_ssize_t len = PyBytes_GET_SIZE(a->a_lnotab);
-    if (a->a_lnotab_off + 2 >= len) {
-        if (_PyBytes_Resize(&a->a_lnotab, len * 2) < 0)
+    Py_ssize_t len = PyBytes_GET_SIZE(*table);
+    if (*offset + 2 >= len) {
+        if (_PyBytes_Resize(table, len * 2) < 0)
             return 0;
     }
-    unsigned char *lnotab = (unsigned char *) PyBytes_AS_STRING(a->a_lnotab);
-    lnotab += a->a_lnotab_off;
-    a->a_lnotab_off += 2;
-    *lnotab++ = bdelta;
-    *lnotab++ = ldelta;
+    unsigned char *table_entry = (unsigned char *)PyBytes_AS_STRING(*table);
+
+    table_entry += *offset;
+    *offset += 2;
+
+    *table_entry++ = left;
+    *table_entry++ = right;
     return 1;
 }
 
@@ -6575,27 +6592,28 @@ assemble_emit_linetable_pair(struct assembler *a, int bdelta, int ldelta)
  *  Objects/lnotab_notes.txt for the description of the line number table. */
 
 static int
-assemble_line_range(struct assembler *a)
+assemble_line_range(struct assembler *a, int current, PyObject **table,
+                    int *prev, int *start, int *offset)
 {
     int ldelta, bdelta;
-    bdelta =  (a->a_offset - a->a_lineno_start) * 2;
+    bdelta =  (a->a_offset - *start) * 2;
     if (bdelta == 0) {
         return 1;
     }
-    if (a->a_lineno < 0) {
+    if (current < 0) {
         ldelta = -128;
     }
     else {
-        ldelta = a->a_lineno - a->a_prevlineno;
-        a->a_prevlineno = a->a_lineno;
+        ldelta = current - *prev;
+        *prev = current;
         while (ldelta > 127) {
-            if (!assemble_emit_linetable_pair(a, 0, 127)) {
+            if (!assemble_emit_table_pair(a, table, offset, 0, 127)) {
                 return 0;
             }
             ldelta -= 127;
         }
         while (ldelta < -127) {
-            if (!assemble_emit_linetable_pair(a, 0, -127)) {
+            if (!assemble_emit_table_pair(a, table, offset, 0, -127)) {
                 return 0;
             }
             ldelta += 127;
@@ -6603,17 +6621,29 @@ assemble_line_range(struct assembler *a)
     }
     assert(-128 <= ldelta && ldelta < 128);
     while (bdelta > 254) {
-        if (!assemble_emit_linetable_pair(a, 254, ldelta)) {
+        if (!assemble_emit_table_pair(a, table, offset, 254, ldelta)) {
             return 0;
         }
-        ldelta = a->a_lineno < 0 ? -128 : 0;
+        ldelta = current < 0 ? -128 : 0;
         bdelta -= 254;
     }
-    if (!assemble_emit_linetable_pair(a, bdelta, ldelta)) {
+    if (!assemble_emit_table_pair(a, table, offset, bdelta, ldelta)) {
         return 0;
     }
-    a->a_lineno_start = a->a_offset;
+    *start = a->a_offset;
     return 1;
+}
+
+static int
+assemble_start_line_range(struct assembler *a) {
+    return assemble_line_range(a, a->a_lineno, &a->a_lnotab,
+                               &a->a_prevlineno, &a->a_lineno_start, &a->a_lnotab_off);
+}
+
+static int
+assemble_end_line_range(struct assembler *a) {
+    return assemble_line_range(a, a->a_end_lineno, &a->a_enotab,
+                               &a->a_prev_end_lineno, &a->a_end_lineno_start, &a->a_enotab_off);
 }
 
 static int
@@ -6622,10 +6652,23 @@ assemble_lnotab(struct assembler *a, struct instr *i)
     if (i->i_lineno == a->a_lineno) {
         return 1;
     }
-    if (!assemble_line_range(a)) {
+    if (!assemble_start_line_range(a)) {
         return 0;
     }
     a->a_lineno = i->i_lineno;
+    return 1;
+}
+
+static int
+assemble_enotab(struct assembler *a, struct instr *i)
+{
+    if (i->i_end_lineno == a->a_end_lineno) {
+        return 1;
+    }
+    if (!assemble_end_line_range(a)) {
+        return 0;
+    }
+    a->a_end_lineno = i->i_end_lineno;
     return 1;
 }
 
@@ -6637,10 +6680,10 @@ assemble_cnotab(struct assembler *a, struct instr *i)
     if (_PyBytes_Resize(&a->a_cnotab, len + 2) < 0) {
         return 0;
     }
-    
+
     unsigned char *cnotab = (unsigned char *)PyBytes_AS_STRING(a->a_cnotab);
     cnotab += len;
-    
+
     if (i->i_col_offset > 255 || i->i_col_offset > 255) {
         *cnotab++ = 0;
         *cnotab++ = 0;
@@ -6649,12 +6692,7 @@ assemble_cnotab(struct assembler *a, struct instr *i)
         *cnotab++ = i->i_col_offset + 1;
     }
 
-    if (i->i_lineno != i->i_end_lineno) {
-        *cnotab++ = 0;
-    } else {
-        *cnotab++ = i->i_end_col_offset + 1;
-    }
-
+    *cnotab++ = i->i_end_col_offset + 1;
     return 1;
 }
 
@@ -6672,10 +6710,15 @@ assemble_emit(struct assembler *a, struct instr *i)
 
     arg = i->i_oparg;
     size = instrsize(arg);
-    if (i->i_lineno && !assemble_lnotab(a, i))
+    if (i->i_lineno && !assemble_lnotab(a, i)) {
         return 0;
-    if (!assemble_cnotab(a, i))
+    }
+    if (!assemble_enotab(a, i)) {
         return 0;
+    }
+    if (!assemble_cnotab(a, i)) {
+        return 0;
+    }
     if (a->a_offset + size >= len / (int)sizeof(_Py_CODEUNIT)) {
         if (len > PY_SSIZE_T_MAX / 2)
             return 0;
@@ -6923,7 +6966,7 @@ makecode(struct compiler *c, struct assembler *a, PyObject *consts)
                                    maxdepth, flags, a->a_bytecode, consts, names,
                                    varnames, freevars, cellvars, c->c_filename,
                                    c->u->u_name, c->u->u_firstlineno, a->a_lnotab,
-                                   a->a_cnotab);
+                                   a->a_enotab, a->a_cnotab);
     Py_DECREF(consts);
  error:
     Py_XDECREF(names);
@@ -7085,14 +7128,22 @@ assemble(struct compiler *c, int addNone)
             if (!assemble_emit(&a, &b->b_instr[j]))
                 goto error;
     }
-    if (!assemble_line_range(&a)) {
+    if (!assemble_start_line_range(&a)) {
         return 0;
     }
-
     if (_PyBytes_Resize(&a.a_lnotab, a.a_lnotab_off) < 0) {
         goto error;
     }
+    if (!assemble_end_line_range(&a)) {
+        return 0;
+    }
+    if (_PyBytes_Resize(&a.a_enotab, a.a_enotab_off) < 0) {
+        goto error;
+    }
     if (!merge_const_one(c, &a.a_lnotab)) {
+        goto error;
+    }
+    if (!merge_const_one(c, &a.a_enotab)) {
         goto error;
     }
     if (_PyBytes_Resize(&a.a_bytecode, a.a_offset * sizeof(_Py_CODEUNIT)) < 0) {

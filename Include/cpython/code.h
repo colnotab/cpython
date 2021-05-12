@@ -40,8 +40,11 @@ struct PyCodeObject {
     PyObject *co_name;          /* unicode (name, for reference) */
     PyObject *co_linetable;     /* string (encoding addr<->lineno mapping) See
                                    Objects/lnotab_notes.txt for details. */
-    PyObject *co_cnotab;        /* string object holds start/end column offset
-                                   each instruction */
+    PyObject *co_enotab;        /* string object that holds end lineno for
+                                   instructions separated across different
+                                   lines */
+    PyObject *co_cnotab;        /* string object that holds start/end column
+                                   offset each instruction */
     void *co_zombieframe;       /* for optimization only (see frameobject.c) */
     PyObject *co_weakreflist;   /* to support weakrefs to code objects */
     /* Scratch space for extra data relating to the code object.
@@ -120,12 +123,13 @@ PyAPI_FUNC(PyCodeObject *) PyCode_New(
         int, int, int, int, int, PyObject *, PyObject *,
         PyObject *, PyObject *, PyObject *, PyObject *,
         PyObject *, PyObject *, int, PyObject *,
-        PyObject *);
+        PyObject *, PyObject *);
 
 PyAPI_FUNC(PyCodeObject *) PyCode_NewWithPosOnlyArgs(
         int, int, int, int, int, int, PyObject *, PyObject *,
         PyObject *, PyObject *, PyObject *, PyObject *,
-        PyObject *, PyObject *, int, PyObject *, PyObject *);
+        PyObject *, PyObject *, int, PyObject *, PyObject *,
+        PyObject *);
         /* same as struct above */
 
 /* Creates a new empty code object with the specified source location. */
