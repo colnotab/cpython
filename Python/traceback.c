@@ -508,7 +508,7 @@ _Py_DisplaySourceLine(PyObject *f, PyObject *filename, int lineno, int indent, i
 
 static int
 tb_displayline(PyObject *f, PyObject *filename, int lineno,
-               PyObject *co_cnotab, int last_i, PyObject *name)
+               PyFrameObject *frame, PyObject *name)
 {
     int err;
     PyObject *line;
@@ -527,38 +527,37 @@ tb_displayline(PyObject *f, PyObject *filename, int lineno,
     int truncation = _TRACEBACK_SOURCE_LINE_INDENT;
     /* ignore errors since we can't report them, can we? */
     if (!_Py_DisplaySourceLine(f, filename, lineno, _TRACEBACK_SOURCE_LINE_INDENT, &truncation)) {
-        if (PyBytes_GET_SIZE(co_cnotab) > last_i * 2) {
-            // WIP
-            char *cnotab = PyBytes_AsString(co_cnotab);
-            if (!cnotab) {
-                err = -1;
-                goto done;
-            }
-            char start = cnotab[last_i * 2];
-            if (start == 0) {
-                goto done;
-            }
-            char end = cnotab[last_i * 2 + 1];
-            if (end == 0) {
-                // TODO: highlight until the line is over
-                goto done;
-            }
-            char offset = truncation;
-            while (++offset <= start - 1) {
-                err = PyFile_WriteString(" ", f);
-                if (err < 0) {
-                    goto done;
-                }
-            }
-            while (++offset <= end) {
-                err = PyFile_WriteString("^", f);
-                if (err < 0) {
-                    goto done;
-                }
-            }
-            err = PyFile_WriteString("\n", f);
+        int code_offset = frame->f_lasti * 2;
+        if (PyCode_Addr2Line(frame->f_code, code_offset) != PyCode_Addr2EndLine(frame->f_code, code_offset)) {
+            goto done;
         }
+
+        int start_offset = PyCode_Addr2Offset(frame->f_code, code_offset);
+        int end_offset = PyCode_Addr2EndOffset(frame->f_code, code_offset);
+        if (start_offset <= 0 || end_offset < 0) {
+            goto done;
+        }
+        if (end_offset == 0) {
+            // TODO: highlight from start_offset to the end of line
+            goto done;
+        }
+
+        char offset = truncation;
+        while (++offset <= start_offset - 1) {
+            err = PyFile_WriteString(" ", f);
+            if (err < 0) {
+                goto done;
+            }
+        }
+        while (++offset <= end_offset) {
+            err = PyFile_WriteString("^", f);
+            if (err < 0) {
+                goto done;
+            }
+        }
+        err = PyFile_WriteString("\n", f);
     }
+
     else {
         PyErr_Clear();
     }
@@ -621,7 +620,7 @@ tb_printinternal(PyTracebackObject *tb, PyObject *f, long limit)
         cnt++;
         if (err == 0 && cnt <= TB_RECURSIVE_CUTOFF) {
             err = tb_displayline(f, code->co_filename, tb->tb_lineno,
-                                 code->co_cnotab, tb->tb_frame->f_lasti, code->co_name);
+                                 tb->tb_frame, code->co_name);
             if (err == 0) {
                 err = PyErr_CheckSignals();
             }
