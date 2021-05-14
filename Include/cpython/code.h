@@ -45,6 +45,7 @@ struct PyCodeObject {
                                    lines */
     PyObject *co_cnotab;        /* string object that holds start/end column
                                    offset each instruction */
+    PyObject *co_exceptiontable; /* Byte string encoding exception handling table */
     void *co_zombieframe;       /* for optimization only (see frameobject.c) */
     PyObject *co_weakreflist;   /* to support weakrefs to code objects */
     /* Scratch space for extra data relating to the code object.
@@ -123,13 +124,13 @@ PyAPI_FUNC(PyCodeObject *) PyCode_New(
         int, int, int, int, int, PyObject *, PyObject *,
         PyObject *, PyObject *, PyObject *, PyObject *,
         PyObject *, PyObject *, int, PyObject *,
-        PyObject *, PyObject *);
+        PyObject *, PyObject *, PyObject *);
 
 PyAPI_FUNC(PyCodeObject *) PyCode_NewWithPosOnlyArgs(
         int, int, int, int, int, int, PyObject *, PyObject *,
         PyObject *, PyObject *, PyObject *, PyObject *,
         PyObject *, PyObject *, int, PyObject *, PyObject *,
-        PyObject *);
+        PyObject *, PyObject *);
         /* same as struct above */
 
 /* Creates a new empty code object with the specified source location. */
