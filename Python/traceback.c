@@ -506,8 +506,9 @@ _Py_DisplaySourceLine(PyObject *f, PyObject *filename, int lineno, int indent, i
 
 #define _TRACEBACK_SOURCE_LINE_INDENT 4
 
+// TODO: Pick up filename and other stuff from the tb argument
 static int
-tb_displayline(PyObject *f, PyObject *filename, int lineno,
+tb_displayline(PyTracebackObject* tb, PyObject *f, PyObject *filename, int lineno,
                PyFrameObject *frame, PyObject *name)
 {
     int err;
@@ -523,11 +524,10 @@ tb_displayline(PyObject *f, PyObject *filename, int lineno,
     Py_DECREF(line);
     if (err != 0)
         return err;
-    
     int truncation = _TRACEBACK_SOURCE_LINE_INDENT;
     /* ignore errors since we can't report them, can we? */
     if (!_Py_DisplaySourceLine(f, filename, lineno, _TRACEBACK_SOURCE_LINE_INDENT, &truncation)) {
-        int code_offset = frame->f_lasti * 2;
+        int code_offset = tb->tb_lasti;
         if (PyCode_Addr2Line(frame->f_code, code_offset) != PyCode_Addr2EndLine(frame->f_code, code_offset)) {
             goto done;
         }
@@ -619,7 +619,7 @@ tb_printinternal(PyTracebackObject *tb, PyObject *f, long limit)
         }
         cnt++;
         if (err == 0 && cnt <= TB_RECURSIVE_CUTOFF) {
-            err = tb_displayline(f, code->co_filename, tb->tb_lineno,
+            err = tb_displayline(tb, f, code->co_filename, tb->tb_lineno,
                                  tb->tb_frame, code->co_name);
             if (err == 0) {
                 err = PyErr_CheckSignals();
