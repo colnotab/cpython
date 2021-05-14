@@ -119,7 +119,8 @@ PyCode_NewWithPosOnlyArgs(int argcount, int posonlyargcount, int kwonlyargcount,
                           PyObject *code, PyObject *consts, PyObject *names,
                           PyObject *varnames, PyObject *freevars, PyObject *cellvars,
                           PyObject *filename, PyObject *name, int firstlineno,
-                          PyObject *linetable, PyObject *enotab, PyObject *cnotab)
+                          PyObject *linetable, PyObject *enotab, PyObject *cnotab,
+                          PyObject *exceptiontable)
 {
     PyCodeObject *co;
     Py_ssize_t *cell2arg = NULL;
@@ -139,7 +140,8 @@ PyCode_NewWithPosOnlyArgs(int argcount, int posonlyargcount, int kwonlyargcount,
         filename == NULL || !PyUnicode_Check(filename) ||
         linetable == NULL || !PyBytes_Check(linetable) ||
         enotab == NULL || (enotab != Py_None && !PyBytes_Check(enotab)) ||
-        cnotab == NULL || (cnotab != Py_None && !PyBytes_Check(cnotab))) {
+        cnotab == NULL || (cnotab != Py_None && !PyBytes_Check(cnotab)) ||
+        exceptiontable == NULL || !PyBytes_Check(exceptiontable)) {
         PyErr_BadInternalCall();
         return NULL;
     }
@@ -281,6 +283,8 @@ PyCode_NewWithPosOnlyArgs(int argcount, int posonlyargcount, int kwonlyargcount,
     co->co_enotab = enotab;
     Py_INCREF(cnotab);
     co->co_cnotab = cnotab;
+    Py_INCREF(exceptiontable);
+    co->co_exceptiontable = exceptiontable;
     co->co_zombieframe = NULL;
     co->co_weakreflist = NULL;
     co->co_extra = NULL;
@@ -298,13 +302,14 @@ PyCode_New(int argcount, int kwonlyargcount,
            PyObject *code, PyObject *consts, PyObject *names,
            PyObject *varnames, PyObject *freevars, PyObject *cellvars,
            PyObject *filename, PyObject *name, int firstlineno,
-           PyObject *linetable, PyObject *enotab, PyObject *cnotab)
+           PyObject *linetable, PyObject *enotab, PyObject *cnotab,
+           PyObject *exceptiontable)
 {
     return PyCode_NewWithPosOnlyArgs(argcount, 0, kwonlyargcount, nlocals,
                                      stacksize, flags, code, consts, names,
                                      varnames, freevars, cellvars, filename,
                                      name, firstlineno, linetable, enotab,
-                                     cnotab);
+                                     cnotab, exceptiontable);
 }
 
 int
@@ -393,7 +398,8 @@ PyCode_NewEmpty(const char *filename, const char *funcname, int firstlineno)
                 firstlineno,                    /* firstlineno */
                 emptystring,                    /* linetable */
                 emptystring,                    /* enotab */
-                emptystring                     /* cnotab */
+                emptystring,                    /* cnotab */
+                emptystring                     /* exception table */
                 );
 
 failed:
@@ -421,8 +427,9 @@ static PyMemberDef code_memberlist[] = {
     {"co_name",         T_OBJECT,       OFF(co_name),            READONLY},
     {"co_firstlineno",  T_INT,          OFF(co_firstlineno),     READONLY},
     {"co_linetable",    T_OBJECT,       OFF(co_linetable),       READONLY},
-    {"co_enotab",       T_OBJECT,       OFF(co_cnotab),          READONLY},
+    {"co_enotab",       T_OBJECT,       OFF(co_enotab),          READONLY},
     {"co_cnotab",       T_OBJECT,       OFF(co_cnotab),          READONLY},
+    {"co_exceptiontable",    T_OBJECT,  OFF(co_exceptiontable),  READONLY},
     {NULL}      /* Sentinel */
 };
 
@@ -566,6 +573,7 @@ code.__new__ as code_new
     linetable: object(subclass_of="&PyBytes_Type")
     enotab: object(subclass_of="&PyBytes_Type")
     cnotab: object(subclass_of="&PyBytes_Type")
+    exceptiontable: object(subclass_of="&PyBytes_Type")
     freevars: object(subclass_of="&PyTuple_Type", c_default="NULL") = ()
     cellvars: object(subclass_of="&PyTuple_Type", c_default="NULL") = ()
     /
@@ -579,8 +587,9 @@ code_new_impl(PyTypeObject *type, int argcount, int posonlyargcount,
               PyObject *code, PyObject *consts, PyObject *names,
               PyObject *varnames, PyObject *filename, PyObject *name,
               int firstlineno, PyObject *linetable, PyObject *enotab,
-              PyObject *cnotab, PyObject *freevars, PyObject *cellvars)
-/*[clinic end generated code: output=7737077364c5a2a7 input=b91b149d9857df1d]*/
+              PyObject *cnotab, PyObject *exceptiontable, PyObject *freevars,
+              PyObject *cellvars)
+/*[clinic end generated code: output=406c096405b318bf input=c9d41e7bd939d6f0]*/
 {
     PyObject *co = NULL;
     PyObject *ournames = NULL;
@@ -647,7 +656,7 @@ code_new_impl(PyTypeObject *type, int argcount, int posonlyargcount,
                                                ourvarnames, ourfreevars,
                                                ourcellvars, filename,
                                                name, firstlineno, linetable,
-                                               enotab, cnotab);
+                                               enotab, cnotab, exceptiontable);
   cleanup:
     Py_XDECREF(ournames);
     Py_XDECREF(ourvarnames);
@@ -694,6 +703,7 @@ code_dealloc(PyCodeObject *co)
     Py_XDECREF(co->co_linetable);
     Py_XDECREF(co->co_enotab);
     Py_XDECREF(co->co_cnotab);
+    Py_XDECREF(co->co_exceptiontable);
     if (co->co_cell2arg != NULL)
         PyMem_Free(co->co_cell2arg);
     if (co->co_zombieframe != NULL)
@@ -748,6 +758,7 @@ code.replace
     co_linetable: PyBytesObject(c_default="(PyBytesObject *)self->co_linetable") = None
     co_enotab: PyBytesObject(c_default="(PyBytesObject *)self->co_enotab") = None
     co_cnotab: PyBytesObject(c_default="(PyBytesObject *)self->co_cnotab") = None
+    co_exceptiontable: PyBytesObject(c_default="(PyBytesObject *)self->co_exceptiontable") = None
 
 Return a copy of the code object with new values for the specified fields.
 [clinic start generated code]*/
@@ -761,8 +772,9 @@ code_replace_impl(PyCodeObject *self, int co_argcount,
                   PyObject *co_varnames, PyObject *co_freevars,
                   PyObject *co_cellvars, PyObject *co_filename,
                   PyObject *co_name, PyBytesObject *co_linetable,
-                  PyBytesObject *co_enotab, PyBytesObject *co_cnotab)
-/*[clinic end generated code: output=0c98db2ed2b226c7 input=0d2e91fdce0dab6c]*/
+                  PyBytesObject *co_enotab, PyBytesObject *co_cnotab,
+                  PyBytesObject *co_exceptiontable)
+/*[clinic end generated code: output=2b091ac8d1020262 input=5615be0c6906252b]*/
 {
 #define CHECK_INT_ARG(ARG) \
         if (ARG < 0) { \
@@ -792,7 +804,8 @@ code_replace_impl(PyCodeObject *self, int co_argcount,
         co_argcount, co_posonlyargcount, co_kwonlyargcount, co_nlocals,
         co_stacksize, co_flags, (PyObject*)co_code, co_consts, co_names,
         co_varnames, co_freevars, co_cellvars, co_filename, co_name,
-        co_firstlineno, (PyObject*)co_linetable, (PyObject *)co_enotab, (PyObject*)co_cnotab);
+        co_firstlineno, (PyObject*)co_linetable, (PyObject *)co_enotab,
+        (PyObject*)co_cnotab, co_exceptiontable);
 }
 
 static PyObject *
