@@ -227,6 +227,8 @@ class CodeTest(unittest.TestCase):
                         co.co_name,
                         co.co_firstlineno,
                         co.co_lnotab,
+                        co.co_enotab,
+                        co.co_cnotab,
                         co.co_exceptiontable,
                         co.co_freevars,
                         co.co_cellvars)

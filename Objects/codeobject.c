@@ -805,7 +805,7 @@ code_replace_impl(PyCodeObject *self, int co_argcount,
         co_stacksize, co_flags, (PyObject*)co_code, co_consts, co_names,
         co_varnames, co_freevars, co_cellvars, co_filename, co_name,
         co_firstlineno, (PyObject*)co_linetable, (PyObject *)co_enotab,
-        (PyObject*)co_cnotab, co_exceptiontable);
+        (PyObject*)co_cnotab, (PyObject*)co_exceptiontable);
 }
 
 static PyObject *
@@ -1469,7 +1469,7 @@ PyCode_Addr2Offset(PyCodeObject *co, int addrq)
         --addrq;
     }
 
-    int size = PyBytes_GET_SIZE(co->co_cnotab);
+    Py_ssize_t size = PyBytes_GET_SIZE(co->co_cnotab);
     if (addrq >= size) {
         return -1;
     }
