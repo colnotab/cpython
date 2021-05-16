@@ -1105,7 +1105,7 @@ error:
     Py_XDECREF(end);
     Py_XDECREF(line);
     Py_XDECREF(result);
-    return result;
+    return NULL;
 }
 
 static PyTypeObject LineIterator = {
