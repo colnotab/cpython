@@ -1196,8 +1196,8 @@ positionsiter_next(positionsiterator *pi)
 
     int loc = PyCode_Addr2Line(pi->pi_code, pi->pi_offset);
     if (loc < 0) {
-        PyErr_Format(PyExc_ValueError, "no");
-        goto error;
+        //PyErr_Format(PyExc_ValueError, "no");
+        //goto error;
     }
     start_line = PyLong_FromLong(loc);
     if (!start_line) {
@@ -1206,8 +1206,8 @@ positionsiter_next(positionsiterator *pi)
 
     loc = PyCode_Addr2EndLine(pi->pi_code, pi->pi_offset);
     if (loc < 0) {
-        PyErr_Format(PyExc_ValueError, "no");
-        goto error;
+        //PyErr_Format(PyExc_ValueError, "no end_lineno");
+        //goto error;
     }
     end_line = PyLong_FromLong(loc);
     if (!end_line) {
@@ -1216,7 +1216,7 @@ positionsiter_next(positionsiterator *pi)
 
     loc = PyCode_Addr2Offset(pi->pi_code, pi->pi_offset);
     if (loc < 0) {
-        PyErr_Format(PyExc_ValueError, "no");
+        PyErr_Format(PyExc_ValueError, "no colno");
         goto error;
     }
     start_col = PyLong_FromLong(loc);
@@ -1226,7 +1226,7 @@ positionsiter_next(positionsiterator *pi)
 
     loc = PyCode_Addr2EndOffset(pi->pi_code, pi->pi_offset);
     if (loc < 0) {
-        PyErr_Format(PyExc_ValueError, "no");
+        PyErr_Format(PyExc_ValueError, "no end_colno");
         goto error;
     }
     end_col = PyLong_FromLong(loc);
@@ -1246,7 +1246,7 @@ error:
     Py_XDECREF(end_line);
     Py_XDECREF(start_col);
     Py_XDECREF(end_col);
-    return result;
+    return NULL;
 }
 
 static PyTypeObject PositionsIterator = {
