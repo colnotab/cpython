@@ -1501,7 +1501,7 @@ compiler_addop_name(struct compiler *c, int opcode, PyObject *dict,
 */
 
 static int
-compiler_addop_i_line(struct compiler *c, int opcode, Py_ssize_t oparg, int lineno)
+compiler_addop_i_line(struct compiler *c, int opcode, Py_ssize_t oparg, int lineno, int nodeid)
 {
     struct instr *i;
     int off;
@@ -1523,19 +1523,20 @@ compiler_addop_i_line(struct compiler *c, int opcode, Py_ssize_t oparg, int line
     i->i_opcode = opcode;
     i->i_oparg = Py_SAFE_DOWNCAST(oparg, Py_ssize_t, int);
     i->i_lineno = lineno;
+    i->i_node_id = nodeid;
     return 1;
 }
 
 static int
 compiler_addop_i(struct compiler *c, int opcode, Py_ssize_t oparg)
 {
-    return compiler_addop_i_line(c, opcode, oparg, c->u->u_lineno);
+    return compiler_addop_i_line(c, opcode, oparg, c->u->u_lineno, c->u->u_node_id);
 }
 
 static int
 compiler_addop_i_noline(struct compiler *c, int opcode, Py_ssize_t oparg)
 {
-    return compiler_addop_i_line(c, opcode, oparg, -1);
+    return compiler_addop_i_line(c, opcode, oparg, -1, -1);
 }
 
 static int add_jump_to_block(basicblock *b, int opcode, int lineno, basicblock *target)
@@ -6996,7 +6997,7 @@ assemble_lnotab(struct assembler *a, struct instr *i)
 static int
 assemble_nodeid(struct assembler *a, struct instr *i)
 {
-    PyObject* node_id = Py_BuildValue("(ii)", a->a_offset, i->i_node_id);
+    PyObject* node_id = PyLong_FromLong(i->i_node_id);
     if (node_id == NULL) {
         return 0;
     }
