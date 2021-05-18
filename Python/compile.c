@@ -5423,12 +5423,14 @@ compiler_visit_expr(struct compiler *c, expr_ty e)
     int old_end_lineno = c->u->u_end_lineno;
     int old_col_offset = c->u->u_col_offset;
     int old_end_col_offset = c->u->u_end_col_offset;
+    int old_node_id = c->u->u_node_id;
     SET_LOC(c, e);
     int res = compiler_visit_expr1(c, e);
     c->u->u_lineno = old_lineno;
     c->u->u_end_lineno = old_end_lineno;
     c->u->u_col_offset = old_col_offset;
     c->u->u_end_col_offset = old_end_col_offset;
+    c->u->u_node_id = old_node_id;
     return res;
 }
 
