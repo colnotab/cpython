@@ -51,7 +51,7 @@ module Python
           | Pass | Break | Continue
 
           -- col_offset is the byte offset in the utf8 string the parser uses
-          attributes (int lineno, int col_offset, int? end_lineno, int? end_col_offset)
+          attributes (int lineno, int col_offset, int? end_lineno, int? end_col_offset, int? node_id)
 
           -- BoolOp() can use left & right?
     expr = BoolOp(boolop op, expr* values)
@@ -90,7 +90,7 @@ module Python
          | Slice(expr? lower, expr? upper, expr? step)
 
           -- col_offset is the byte offset in the utf8 string the parser uses
-          attributes (int lineno, int col_offset, int? end_lineno, int? end_col_offset)
+          attributes (int lineno, int col_offset, int? end_lineno, int? end_col_offset, int? node_id)
 
     expr_context = Load | Store | Del
 
@@ -106,21 +106,21 @@ module Python
     comprehension = (expr target, expr iter, expr* ifs, int is_async)
 
     excepthandler = ExceptHandler(expr? type, identifier? name, stmt* body)
-                    attributes (int lineno, int col_offset, int? end_lineno, int? end_col_offset)
+                    attributes (int lineno, int col_offset, int? end_lineno, int? end_col_offset, int? node_id)
 
     arguments = (arg* posonlyargs, arg* args, arg? vararg, arg* kwonlyargs,
                  expr* kw_defaults, arg? kwarg, expr* defaults)
 
     arg = (identifier arg, expr? annotation, string? type_comment)
-           attributes (int lineno, int col_offset, int? end_lineno, int? end_col_offset)
+           attributes (int lineno, int col_offset, int? end_lineno, int? end_col_offset, int? node_id)
 
     -- keyword arguments supplied to call (NULL identifier for **kwargs)
     keyword = (identifier? arg, expr value)
-               attributes (int lineno, int col_offset, int? end_lineno, int? end_col_offset)
+               attributes (int lineno, int col_offset, int? end_lineno, int? end_col_offset, int? node_id)
 
     -- import name with optional 'as' alias.
     alias = (identifier name, identifier? asname)
-             attributes (int lineno, int col_offset, int? end_lineno, int? end_col_offset)
+             attributes (int lineno, int col_offset, int? end_lineno, int? end_col_offset, int? node_id)
 
     withitem = (expr context_expr, expr? optional_vars)
 
@@ -138,7 +138,7 @@ module Python
             | MatchAs(pattern? pattern, identifier? name)
             | MatchOr(pattern* patterns)
 
-             attributes (int lineno, int col_offset, int end_lineno, int end_col_offset)
+             attributes (int lineno, int col_offset, int end_lineno, int end_col_offset, int? node_id)
 
     type_ignore = TypeIgnore(int lineno, string tag)
 }

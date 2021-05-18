@@ -801,7 +801,8 @@ fstring_find_expr(Parser *p, const char **str, const char *end, int raw, int rec
                                         format_spec, first_token->lineno,
                                         first_token->col_offset,
                                         last_token->end_lineno,
-                                        last_token->end_col_offset, p->arena);
+                                        last_token->end_col_offset,
+                                        p->node_id++, p->arena);
     if (!*expression) {
         goto error;
     }
@@ -1047,7 +1048,7 @@ make_str_node_and_del(Parser *p, PyObject **str, Token* first_token, Token *last
 
     return _PyAST_Constant(s, kind, first_token->lineno, first_token->col_offset,
                            last_token->end_lineno, last_token->end_col_offset,
-                           p->arena);
+                           p->node_id++, p->arena);
 
 }
 
@@ -1208,7 +1209,7 @@ _PyPegen_FstringParser_Finish(Parser *p, FstringParser *state, Token* first_toke
 
     return _PyAST_JoinedStr(seq, first_token->lineno, first_token->col_offset,
                             last_token->end_lineno, last_token->end_col_offset,
-                            p->arena);
+                            p->node_id++, p->arena);
 
 error:
     _PyPegen_FstringParser_Dealloc(state);

@@ -74,6 +74,7 @@ typedef struct {
     Token *known_err_token;
     int level;
     int call_invalid_rules;
+    int node_id;
 } Parser;
 
 typedef struct {
@@ -166,8 +167,8 @@ RAISE_ERROR_KNOWN_LOCATION(Parser *p, PyObject *errtype,
 }
 
 #define UNUSED(expr) do { (void)(expr); } while (0)
-#define EXTRA_EXPR(head, tail) head->lineno, (head)->col_offset, (tail)->end_lineno, (tail)->end_col_offset, p->arena
-#define EXTRA _start_lineno, _start_col_offset, _end_lineno, _end_col_offset, p->arena
+#define EXTRA_EXPR(head, tail) head->lineno, (head)->col_offset, (tail)->end_lineno, (tail)->end_col_offset, p->node_id++, p->arena
+#define EXTRA _start_lineno, _start_col_offset, _end_lineno, _end_col_offset, p->node_id++, p->arena
 #define RAISE_SYNTAX_ERROR(msg, ...) _PyPegen_raise_error(p, PyExc_SyntaxError, msg, ##__VA_ARGS__)
 #define RAISE_INDENTATION_ERROR(msg, ...) _PyPegen_raise_error(p, PyExc_IndentationError, msg, ##__VA_ARGS__)
 #define RAISE_SYNTAX_ERROR_KNOWN_RANGE(a, b, msg, ...) \
@@ -255,7 +256,7 @@ asdl_seq *_PyPegen_seq_append_to_end(Parser *, asdl_seq *, void *);
 asdl_seq *_PyPegen_seq_flatten(Parser *, asdl_seq *);
 expr_ty _PyPegen_join_names_with_dot(Parser *, expr_ty, expr_ty);
 int _PyPegen_seq_count_dots(asdl_seq *);
-alias_ty _PyPegen_alias_for_star(Parser *, int, int, int, int, PyArena *);
+alias_ty _PyPegen_alias_for_star(Parser *, int, int, int, int, int, PyArena *);
 asdl_identifier_seq *_PyPegen_map_names_to_ids(Parser *, asdl_expr_seq *);
 CmpopExprPair *_PyPegen_cmpop_expr_pair(Parser *, cmpop_ty, expr_ty);
 asdl_int_seq *_PyPegen_get_cmpops(Parser *p, asdl_seq *);
@@ -281,7 +282,7 @@ asdl_expr_seq *_PyPegen_seq_extract_starred_exprs(Parser *, asdl_seq *);
 asdl_keyword_seq *_PyPegen_seq_delete_starred_exprs(Parser *, asdl_seq *);
 expr_ty _PyPegen_collect_call_seqs(Parser *, asdl_expr_seq *, asdl_seq *,
                      int lineno, int col_offset, int end_lineno,
-                     int end_col_offset, PyArena *arena);
+                     int end_col_offset, int node_id, PyArena *arena);
 expr_ty _PyPegen_concatenate_strings(Parser *p, asdl_seq *);
 expr_ty _PyPegen_ensure_imaginary(Parser *p, expr_ty);
 expr_ty _PyPegen_ensure_real(Parser *p, expr_ty);

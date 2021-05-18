@@ -37,6 +37,7 @@
 #define DEFAULT_BLOCKS 8
 #define DEFAULT_CODE_SIZE 128
 #define DEFAULT_LNOTAB_SIZE 16
+#define DEFAULT_NODEID_SIZE 128
 
 #define COMP_GENEXP   0
 #define COMP_LISTCOMP 1
@@ -87,6 +88,7 @@ struct instr {
      /* target block when exception is raised, should not be set by front-end. */
     struct basicblock_ *i_except;
     int i_lineno;
+    int i_node_id;
 };
 
 typedef struct excepthandler {
@@ -226,6 +228,7 @@ struct compiler_unit {
     int u_col_offset;      /* the offset of the current stmt */
     int u_end_lineno;      /* the end line of the current stmt */
     int u_end_col_offset;  /* the end offset of the current stmt */
+    int u_node_id;         /* the lineno for the current stmt */
 };
 
 /* This struct captures the global state of a compilation.
@@ -698,6 +701,7 @@ compiler_enter_scope(struct compiler *c, identifier name,
     u->u_col_offset = 0;
     u->u_end_lineno = 0;
     u->u_end_col_offset = 0;
+    u->u_node_id = 0;
     u->u_consts = PyDict_New();
     if (!u->u_consts) {
         compiler_unit_free(u);
@@ -970,7 +974,8 @@ compiler_next_instr(basicblock *b)
     (c)->u->u_lineno = (x)->lineno;             \
     (c)->u->u_col_offset = (x)->col_offset;     \
     (c)->u->u_end_lineno = (x)->end_lineno;     \
-    (c)->u->u_end_col_offset = (x)->end_col_offset;
+    (c)->u->u_end_col_offset = (x)->end_col_offset; \
+    (c)->u->u_node_id = (x)->node_id; \
 
 /* Return the stack effect of opcode with argument oparg.
 
@@ -1273,7 +1278,7 @@ PyCompile_OpcodeStackEffect(int opcode, int oparg)
 */
 
 static int
-compiler_addop_line(struct compiler *c, int opcode, int line)
+compiler_addop_line(struct compiler *c, int opcode, int line, int node_id)
 {
     basicblock *b;
     struct instr *i;
@@ -1289,19 +1294,20 @@ compiler_addop_line(struct compiler *c, int opcode, int line)
     if (opcode == RETURN_VALUE)
         b->b_return = 1;
     i->i_lineno = line;
+    i->i_node_id = node_id;
     return 1;
 }
 
 static int
 compiler_addop(struct compiler *c, int opcode)
 {
-    return compiler_addop_line(c, opcode, c->u->u_lineno);
+    return compiler_addop_line(c, opcode, c->u->u_lineno, c->u->u_node_id);
 }
 
 static int
 compiler_addop_noline(struct compiler *c, int opcode)
 {
-    return compiler_addop_line(c, opcode, -1);
+    return compiler_addop_line(c, opcode, -1, -1);
 }
 
 
@@ -6517,6 +6523,9 @@ struct assembler {
     int a_prevlineno;     /* lineno of last emitted line in line table */
     int a_lineno;          /* lineno of last emitted instruction */
     int a_lineno_start;    /* bytecode start offset of current lineno */
+    int *a_node_ids;
+    int a_node_ids_off;
+    int a_node_ids_size;
     basicblock *a_entry;
 };
 
@@ -6632,6 +6641,13 @@ assemble_init(struct assembler *a, int nblocks, int firstlineno)
         PyErr_NoMemory();
         goto error;
     }
+    a->a_node_ids = PyMem_Malloc(sizeof(int) * DEFAULT_NODEID_SIZE);
+    if (a->a_node_ids == NULL) {
+        PyErr_NoMemory();
+        goto error;
+    }
+    a->a_node_ids_size = DEFAULT_NODEID_SIZE;
+    a->a_node_ids_off = 0;
     return 1;
 error:
     Py_XDECREF(a->a_bytecode);
@@ -6980,6 +6996,22 @@ assemble_lnotab(struct assembler *a, struct instr *i)
     return 1;
 }
 
+static int
+assemble_nodeid(struct assembler *a, struct instr *i)
+{
+    if (a->a_node_ids_off >= a->a_node_ids_size) {
+        int* new_node_ids = PyMem_Realloc(a->a_node_ids, a->a_node_ids_size * 2);
+        if (a->a_node_ids == NULL) {
+            // Todo: Fix the lifetime of the array!
+            PyMem_Free(a->a_node_ids);
+            return 0;
+        }
+        a->a_node_ids = new_node_ids;
+        a->a_node_ids_size = a->a_node_ids_size * 2;
+    }
+    a->a_node_ids[a->a_node_ids_off++] = i->i_node_id;
+    return 1;
+}
 
 /* assemble_emit()
    Extend the bytecode with a new instruction.
@@ -6996,6 +7028,9 @@ assemble_emit(struct assembler *a, struct instr *i)
     arg = i->i_oparg;
     size = instrsize(arg);
     if (i->i_lineno && !assemble_lnotab(a, i))
+        return 0;
+    printf("Node_id: %d\n", i->i_node_id);
+    if (i->i_node_id && !assemble_nodeid(a, i))
         return 0;
     if (a->a_offset + size >= len / (int)sizeof(_Py_CODEUNIT)) {
         if (len > PY_SSIZE_T_MAX / 2)
@@ -7441,6 +7476,13 @@ assemble(struct compiler *c, int addNone)
             if (!assemble_emit(&a, &b->b_instr[j]))
                 goto error;
     }
+
+    // TODO: Remove
+    printf("Table: ");
+    for(int x = 0; x < a.a_node_ids_off; x++) {
+        printf("%d,", a.a_node_ids[x]);
+    }
+    printf("\n");
 
     if (!assemble_exception_table(&a)) {
         return 0;

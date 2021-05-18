@@ -228,6 +228,7 @@ void _PyAST_Fini(PyInterpreterState *interp)
     Py_CLEAR(state->msg);
     Py_CLEAR(state->name);
     Py_CLEAR(state->names);
+    Py_CLEAR(state->node_id);
     Py_CLEAR(state->op);
     Py_CLEAR(state->operand);
     Py_CLEAR(state->operator_type);
@@ -328,6 +329,7 @@ static int init_identifiers(struct ast_state *state)
     if ((state->msg = PyUnicode_InternFromString("msg")) == NULL) return 0;
     if ((state->name = PyUnicode_InternFromString("name")) == NULL) return 0;
     if ((state->names = PyUnicode_InternFromString("names")) == NULL) return 0;
+    if ((state->node_id = PyUnicode_InternFromString("node_id")) == NULL) return 0;
     if ((state->op = PyUnicode_InternFromString("op")) == NULL) return 0;
     if ((state->operand = PyUnicode_InternFromString("operand")) == NULL) return 0;
     if ((state->ops = PyUnicode_InternFromString("ops")) == NULL) return 0;
@@ -391,6 +393,7 @@ static const char * const stmt_attributes[] = {
     "col_offset",
     "end_lineno",
     "end_col_offset",
+    "node_id",
 };
 static PyObject* ast2obj_stmt(struct ast_state *state, void*);
 static const char * const FunctionDef_fields[]={
@@ -512,6 +515,7 @@ static const char * const expr_attributes[] = {
     "col_offset",
     "end_lineno",
     "end_col_offset",
+    "node_id",
 };
 static PyObject* ast2obj_expr(struct ast_state *state, void*);
 static const char * const BoolOp_fields[]={
@@ -643,6 +647,7 @@ static const char * const excepthandler_attributes[] = {
     "col_offset",
     "end_lineno",
     "end_col_offset",
+    "node_id",
 };
 static PyObject* ast2obj_excepthandler(struct ast_state *state, void*);
 static const char * const ExceptHandler_fields[]={
@@ -666,6 +671,7 @@ static const char * const arg_attributes[] = {
     "col_offset",
     "end_lineno",
     "end_col_offset",
+    "node_id",
 };
 static const char * const arg_fields[]={
     "arg",
@@ -678,6 +684,7 @@ static const char * const keyword_attributes[] = {
     "col_offset",
     "end_lineno",
     "end_col_offset",
+    "node_id",
 };
 static const char * const keyword_fields[]={
     "arg",
@@ -689,6 +696,7 @@ static const char * const alias_attributes[] = {
     "col_offset",
     "end_lineno",
     "end_col_offset",
+    "node_id",
 };
 static const char * const alias_fields[]={
     "name",
@@ -710,6 +718,7 @@ static const char * const pattern_attributes[] = {
     "col_offset",
     "end_lineno",
     "end_col_offset",
+    "node_id",
 };
 static PyObject* ast2obj_pattern(struct ast_state *state, void*);
 static const char * const MatchValue_fields[]={
@@ -1149,11 +1158,13 @@ init_types(struct ast_state *state)
         "     | Break\n"
         "     | Continue");
     if (!state->stmt_type) return 0;
-    if (!add_attributes(state, state->stmt_type, stmt_attributes, 4)) return 0;
+    if (!add_attributes(state, state->stmt_type, stmt_attributes, 5)) return 0;
     if (PyObject_SetAttr(state->stmt_type, state->end_lineno, Py_None) == -1)
         return 0;
     if (PyObject_SetAttr(state->stmt_type, state->end_col_offset, Py_None) ==
         -1)
+        return 0;
+    if (PyObject_SetAttr(state->stmt_type, state->node_id, Py_None) == -1)
         return 0;
     state->FunctionDef_type = make_type(state, "FunctionDef", state->stmt_type,
                                         FunctionDef_fields, 6,
@@ -1323,11 +1334,13 @@ init_types(struct ast_state *state)
         "     | Tuple(expr* elts, expr_context ctx)\n"
         "     | Slice(expr? lower, expr? upper, expr? step)");
     if (!state->expr_type) return 0;
-    if (!add_attributes(state, state->expr_type, expr_attributes, 4)) return 0;
+    if (!add_attributes(state, state->expr_type, expr_attributes, 5)) return 0;
     if (PyObject_SetAttr(state->expr_type, state->end_lineno, Py_None) == -1)
         return 0;
     if (PyObject_SetAttr(state->expr_type, state->end_col_offset, Py_None) ==
         -1)
+        return 0;
+    if (PyObject_SetAttr(state->expr_type, state->node_id, Py_None) == -1)
         return 0;
     state->BoolOp_type = make_type(state, "BoolOp", state->expr_type,
                                    BoolOp_fields, 2,
@@ -1695,12 +1708,15 @@ init_types(struct ast_state *state)
         "excepthandler = ExceptHandler(expr? type, identifier? name, stmt* body)");
     if (!state->excepthandler_type) return 0;
     if (!add_attributes(state, state->excepthandler_type,
-        excepthandler_attributes, 4)) return 0;
+        excepthandler_attributes, 5)) return 0;
     if (PyObject_SetAttr(state->excepthandler_type, state->end_lineno, Py_None)
         == -1)
         return 0;
     if (PyObject_SetAttr(state->excepthandler_type, state->end_col_offset,
         Py_None) == -1)
+        return 0;
+    if (PyObject_SetAttr(state->excepthandler_type, state->node_id, Py_None) ==
+        -1)
         return 0;
     state->ExceptHandler_type = make_type(state, "ExceptHandler",
                                           state->excepthandler_type,
@@ -1723,7 +1739,7 @@ init_types(struct ast_state *state)
     state->arg_type = make_type(state, "arg", state->AST_type, arg_fields, 3,
         "arg(identifier arg, expr? annotation, string? type_comment)");
     if (!state->arg_type) return 0;
-    if (!add_attributes(state, state->arg_type, arg_attributes, 4)) return 0;
+    if (!add_attributes(state, state->arg_type, arg_attributes, 5)) return 0;
     if (PyObject_SetAttr(state->arg_type, state->annotation, Py_None) == -1)
         return 0;
     if (PyObject_SetAttr(state->arg_type, state->type_comment, Py_None) == -1)
@@ -1732,11 +1748,13 @@ init_types(struct ast_state *state)
         return 0;
     if (PyObject_SetAttr(state->arg_type, state->end_col_offset, Py_None) == -1)
         return 0;
+    if (PyObject_SetAttr(state->arg_type, state->node_id, Py_None) == -1)
+        return 0;
     state->keyword_type = make_type(state, "keyword", state->AST_type,
                                     keyword_fields, 2,
         "keyword(identifier? arg, expr value)");
     if (!state->keyword_type) return 0;
-    if (!add_attributes(state, state->keyword_type, keyword_attributes, 4))
+    if (!add_attributes(state, state->keyword_type, keyword_attributes, 5))
         return 0;
     if (PyObject_SetAttr(state->keyword_type, state->arg, Py_None) == -1)
         return 0;
@@ -1745,11 +1763,13 @@ init_types(struct ast_state *state)
     if (PyObject_SetAttr(state->keyword_type, state->end_col_offset, Py_None)
         == -1)
         return 0;
+    if (PyObject_SetAttr(state->keyword_type, state->node_id, Py_None) == -1)
+        return 0;
     state->alias_type = make_type(state, "alias", state->AST_type,
                                   alias_fields, 2,
         "alias(identifier name, identifier? asname)");
     if (!state->alias_type) return 0;
-    if (!add_attributes(state, state->alias_type, alias_attributes, 4)) return
+    if (!add_attributes(state, state->alias_type, alias_attributes, 5)) return
         0;
     if (PyObject_SetAttr(state->alias_type, state->asname, Py_None) == -1)
         return 0;
@@ -1757,6 +1777,8 @@ init_types(struct ast_state *state)
         return 0;
     if (PyObject_SetAttr(state->alias_type, state->end_col_offset, Py_None) ==
         -1)
+        return 0;
+    if (PyObject_SetAttr(state->alias_type, state->node_id, Py_None) == -1)
         return 0;
     state->withitem_type = make_type(state, "withitem", state->AST_type,
                                      withitem_fields, 2,
@@ -1783,7 +1805,9 @@ init_types(struct ast_state *state)
         "        | MatchAs(pattern? pattern, identifier? name)\n"
         "        | MatchOr(pattern* patterns)");
     if (!state->pattern_type) return 0;
-    if (!add_attributes(state, state->pattern_type, pattern_attributes, 4))
+    if (!add_attributes(state, state->pattern_type, pattern_attributes, 5))
+        return 0;
+    if (PyObject_SetAttr(state->pattern_type, state->node_id, Py_None) == -1)
         return 0;
     state->MatchValue_type = make_type(state, "MatchValue",
                                        state->pattern_type, MatchValue_fields,
@@ -1947,7 +1971,7 @@ stmt_ty
 _PyAST_FunctionDef(identifier name, arguments_ty args, asdl_stmt_seq * body,
                    asdl_expr_seq * decorator_list, expr_ty returns, string
                    type_comment, int lineno, int col_offset, int end_lineno,
-                   int end_col_offset, PyArena *arena)
+                   int end_col_offset, int node_id, PyArena *arena)
 {
     stmt_ty p;
     if (!name) {
@@ -1974,6 +1998,7 @@ _PyAST_FunctionDef(identifier name, arguments_ty args, asdl_stmt_seq * body,
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
@@ -1981,7 +2006,8 @@ stmt_ty
 _PyAST_AsyncFunctionDef(identifier name, arguments_ty args, asdl_stmt_seq *
                         body, asdl_expr_seq * decorator_list, expr_ty returns,
                         string type_comment, int lineno, int col_offset, int
-                        end_lineno, int end_col_offset, PyArena *arena)
+                        end_lineno, int end_col_offset, int node_id, PyArena
+                        *arena)
 {
     stmt_ty p;
     if (!name) {
@@ -2008,6 +2034,7 @@ _PyAST_AsyncFunctionDef(identifier name, arguments_ty args, asdl_stmt_seq *
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
@@ -2015,7 +2042,7 @@ stmt_ty
 _PyAST_ClassDef(identifier name, asdl_expr_seq * bases, asdl_keyword_seq *
                 keywords, asdl_stmt_seq * body, asdl_expr_seq * decorator_list,
                 int lineno, int col_offset, int end_lineno, int end_col_offset,
-                PyArena *arena)
+                int node_id, PyArena *arena)
 {
     stmt_ty p;
     if (!name) {
@@ -2036,12 +2063,13 @@ _PyAST_ClassDef(identifier name, asdl_expr_seq * bases, asdl_keyword_seq *
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 stmt_ty
 _PyAST_Return(expr_ty value, int lineno, int col_offset, int end_lineno, int
-              end_col_offset, PyArena *arena)
+              end_col_offset, int node_id, PyArena *arena)
 {
     stmt_ty p;
     p = (stmt_ty)_PyArena_Malloc(arena, sizeof(*p));
@@ -2053,12 +2081,13 @@ _PyAST_Return(expr_ty value, int lineno, int col_offset, int end_lineno, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 stmt_ty
 _PyAST_Delete(asdl_expr_seq * targets, int lineno, int col_offset, int
-              end_lineno, int end_col_offset, PyArena *arena)
+              end_lineno, int end_col_offset, int node_id, PyArena *arena)
 {
     stmt_ty p;
     p = (stmt_ty)_PyArena_Malloc(arena, sizeof(*p));
@@ -2070,13 +2099,14 @@ _PyAST_Delete(asdl_expr_seq * targets, int lineno, int col_offset, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 stmt_ty
 _PyAST_Assign(asdl_expr_seq * targets, expr_ty value, string type_comment, int
-              lineno, int col_offset, int end_lineno, int end_col_offset,
-              PyArena *arena)
+              lineno, int col_offset, int end_lineno, int end_col_offset, int
+              node_id, PyArena *arena)
 {
     stmt_ty p;
     if (!value) {
@@ -2095,12 +2125,14 @@ _PyAST_Assign(asdl_expr_seq * targets, expr_ty value, string type_comment, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 stmt_ty
 _PyAST_AugAssign(expr_ty target, operator_ty op, expr_ty value, int lineno, int
-                 col_offset, int end_lineno, int end_col_offset, PyArena *arena)
+                 col_offset, int end_lineno, int end_col_offset, int node_id,
+                 PyArena *arena)
 {
     stmt_ty p;
     if (!target) {
@@ -2129,13 +2161,14 @@ _PyAST_AugAssign(expr_ty target, operator_ty op, expr_ty value, int lineno, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 stmt_ty
 _PyAST_AnnAssign(expr_ty target, expr_ty annotation, expr_ty value, int simple,
                  int lineno, int col_offset, int end_lineno, int
-                 end_col_offset, PyArena *arena)
+                 end_col_offset, int node_id, PyArena *arena)
 {
     stmt_ty p;
     if (!target) {
@@ -2160,13 +2193,14 @@ _PyAST_AnnAssign(expr_ty target, expr_ty annotation, expr_ty value, int simple,
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 stmt_ty
 _PyAST_For(expr_ty target, expr_ty iter, asdl_stmt_seq * body, asdl_stmt_seq *
            orelse, string type_comment, int lineno, int col_offset, int
-           end_lineno, int end_col_offset, PyArena *arena)
+           end_lineno, int end_col_offset, int node_id, PyArena *arena)
 {
     stmt_ty p;
     if (!target) {
@@ -2192,13 +2226,15 @@ _PyAST_For(expr_ty target, expr_ty iter, asdl_stmt_seq * body, asdl_stmt_seq *
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 stmt_ty
 _PyAST_AsyncFor(expr_ty target, expr_ty iter, asdl_stmt_seq * body,
                 asdl_stmt_seq * orelse, string type_comment, int lineno, int
-                col_offset, int end_lineno, int end_col_offset, PyArena *arena)
+                col_offset, int end_lineno, int end_col_offset, int node_id,
+                PyArena *arena)
 {
     stmt_ty p;
     if (!target) {
@@ -2224,13 +2260,14 @@ _PyAST_AsyncFor(expr_ty target, expr_ty iter, asdl_stmt_seq * body,
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 stmt_ty
 _PyAST_While(expr_ty test, asdl_stmt_seq * body, asdl_stmt_seq * orelse, int
-             lineno, int col_offset, int end_lineno, int end_col_offset,
-             PyArena *arena)
+             lineno, int col_offset, int end_lineno, int end_col_offset, int
+             node_id, PyArena *arena)
 {
     stmt_ty p;
     if (!test) {
@@ -2249,13 +2286,14 @@ _PyAST_While(expr_ty test, asdl_stmt_seq * body, asdl_stmt_seq * orelse, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 stmt_ty
 _PyAST_If(expr_ty test, asdl_stmt_seq * body, asdl_stmt_seq * orelse, int
-          lineno, int col_offset, int end_lineno, int end_col_offset, PyArena
-          *arena)
+          lineno, int col_offset, int end_lineno, int end_col_offset, int
+          node_id, PyArena *arena)
 {
     stmt_ty p;
     if (!test) {
@@ -2274,13 +2312,14 @@ _PyAST_If(expr_ty test, asdl_stmt_seq * body, asdl_stmt_seq * orelse, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 stmt_ty
 _PyAST_With(asdl_withitem_seq * items, asdl_stmt_seq * body, string
             type_comment, int lineno, int col_offset, int end_lineno, int
-            end_col_offset, PyArena *arena)
+            end_col_offset, int node_id, PyArena *arena)
 {
     stmt_ty p;
     p = (stmt_ty)_PyArena_Malloc(arena, sizeof(*p));
@@ -2294,13 +2333,14 @@ _PyAST_With(asdl_withitem_seq * items, asdl_stmt_seq * body, string
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 stmt_ty
 _PyAST_AsyncWith(asdl_withitem_seq * items, asdl_stmt_seq * body, string
                  type_comment, int lineno, int col_offset, int end_lineno, int
-                 end_col_offset, PyArena *arena)
+                 end_col_offset, int node_id, PyArena *arena)
 {
     stmt_ty p;
     p = (stmt_ty)_PyArena_Malloc(arena, sizeof(*p));
@@ -2314,12 +2354,14 @@ _PyAST_AsyncWith(asdl_withitem_seq * items, asdl_stmt_seq * body, string
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 stmt_ty
 _PyAST_Match(expr_ty subject, asdl_match_case_seq * cases, int lineno, int
-             col_offset, int end_lineno, int end_col_offset, PyArena *arena)
+             col_offset, int end_lineno, int end_col_offset, int node_id,
+             PyArena *arena)
 {
     stmt_ty p;
     if (!subject) {
@@ -2337,12 +2379,13 @@ _PyAST_Match(expr_ty subject, asdl_match_case_seq * cases, int lineno, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 stmt_ty
 _PyAST_Raise(expr_ty exc, expr_ty cause, int lineno, int col_offset, int
-             end_lineno, int end_col_offset, PyArena *arena)
+             end_lineno, int end_col_offset, int node_id, PyArena *arena)
 {
     stmt_ty p;
     p = (stmt_ty)_PyArena_Malloc(arena, sizeof(*p));
@@ -2355,13 +2398,15 @@ _PyAST_Raise(expr_ty exc, expr_ty cause, int lineno, int col_offset, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 stmt_ty
 _PyAST_Try(asdl_stmt_seq * body, asdl_excepthandler_seq * handlers,
            asdl_stmt_seq * orelse, asdl_stmt_seq * finalbody, int lineno, int
-           col_offset, int end_lineno, int end_col_offset, PyArena *arena)
+           col_offset, int end_lineno, int end_col_offset, int node_id, PyArena
+           *arena)
 {
     stmt_ty p;
     p = (stmt_ty)_PyArena_Malloc(arena, sizeof(*p));
@@ -2376,12 +2421,13 @@ _PyAST_Try(asdl_stmt_seq * body, asdl_excepthandler_seq * handlers,
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 stmt_ty
 _PyAST_Assert(expr_ty test, expr_ty msg, int lineno, int col_offset, int
-              end_lineno, int end_col_offset, PyArena *arena)
+              end_lineno, int end_col_offset, int node_id, PyArena *arena)
 {
     stmt_ty p;
     if (!test) {
@@ -2399,12 +2445,13 @@ _PyAST_Assert(expr_ty test, expr_ty msg, int lineno, int col_offset, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 stmt_ty
 _PyAST_Import(asdl_alias_seq * names, int lineno, int col_offset, int
-              end_lineno, int end_col_offset, PyArena *arena)
+              end_lineno, int end_col_offset, int node_id, PyArena *arena)
 {
     stmt_ty p;
     p = (stmt_ty)_PyArena_Malloc(arena, sizeof(*p));
@@ -2416,13 +2463,14 @@ _PyAST_Import(asdl_alias_seq * names, int lineno, int col_offset, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 stmt_ty
 _PyAST_ImportFrom(identifier module, asdl_alias_seq * names, int level, int
                   lineno, int col_offset, int end_lineno, int end_col_offset,
-                  PyArena *arena)
+                  int node_id, PyArena *arena)
 {
     stmt_ty p;
     p = (stmt_ty)_PyArena_Malloc(arena, sizeof(*p));
@@ -2436,12 +2484,13 @@ _PyAST_ImportFrom(identifier module, asdl_alias_seq * names, int level, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 stmt_ty
 _PyAST_Global(asdl_identifier_seq * names, int lineno, int col_offset, int
-              end_lineno, int end_col_offset, PyArena *arena)
+              end_lineno, int end_col_offset, int node_id, PyArena *arena)
 {
     stmt_ty p;
     p = (stmt_ty)_PyArena_Malloc(arena, sizeof(*p));
@@ -2453,12 +2502,13 @@ _PyAST_Global(asdl_identifier_seq * names, int lineno, int col_offset, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 stmt_ty
 _PyAST_Nonlocal(asdl_identifier_seq * names, int lineno, int col_offset, int
-                end_lineno, int end_col_offset, PyArena *arena)
+                end_lineno, int end_col_offset, int node_id, PyArena *arena)
 {
     stmt_ty p;
     p = (stmt_ty)_PyArena_Malloc(arena, sizeof(*p));
@@ -2470,12 +2520,13 @@ _PyAST_Nonlocal(asdl_identifier_seq * names, int lineno, int col_offset, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 stmt_ty
 _PyAST_Expr(expr_ty value, int lineno, int col_offset, int end_lineno, int
-            end_col_offset, PyArena *arena)
+            end_col_offset, int node_id, PyArena *arena)
 {
     stmt_ty p;
     if (!value) {
@@ -2492,12 +2543,13 @@ _PyAST_Expr(expr_ty value, int lineno, int col_offset, int end_lineno, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 stmt_ty
-_PyAST_Pass(int lineno, int col_offset, int end_lineno, int end_col_offset,
-            PyArena *arena)
+_PyAST_Pass(int lineno, int col_offset, int end_lineno, int end_col_offset, int
+            node_id, PyArena *arena)
 {
     stmt_ty p;
     p = (stmt_ty)_PyArena_Malloc(arena, sizeof(*p));
@@ -2508,12 +2560,13 @@ _PyAST_Pass(int lineno, int col_offset, int end_lineno, int end_col_offset,
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 stmt_ty
 _PyAST_Break(int lineno, int col_offset, int end_lineno, int end_col_offset,
-             PyArena *arena)
+             int node_id, PyArena *arena)
 {
     stmt_ty p;
     p = (stmt_ty)_PyArena_Malloc(arena, sizeof(*p));
@@ -2524,12 +2577,13 @@ _PyAST_Break(int lineno, int col_offset, int end_lineno, int end_col_offset,
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 stmt_ty
 _PyAST_Continue(int lineno, int col_offset, int end_lineno, int end_col_offset,
-                PyArena *arena)
+                int node_id, PyArena *arena)
 {
     stmt_ty p;
     p = (stmt_ty)_PyArena_Malloc(arena, sizeof(*p));
@@ -2540,12 +2594,13 @@ _PyAST_Continue(int lineno, int col_offset, int end_lineno, int end_col_offset,
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 expr_ty
 _PyAST_BoolOp(boolop_ty op, asdl_expr_seq * values, int lineno, int col_offset,
-              int end_lineno, int end_col_offset, PyArena *arena)
+              int end_lineno, int end_col_offset, int node_id, PyArena *arena)
 {
     expr_ty p;
     if (!op) {
@@ -2563,12 +2618,13 @@ _PyAST_BoolOp(boolop_ty op, asdl_expr_seq * values, int lineno, int col_offset,
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 expr_ty
 _PyAST_NamedExpr(expr_ty target, expr_ty value, int lineno, int col_offset, int
-                 end_lineno, int end_col_offset, PyArena *arena)
+                 end_lineno, int end_col_offset, int node_id, PyArena *arena)
 {
     expr_ty p;
     if (!target) {
@@ -2591,12 +2647,14 @@ _PyAST_NamedExpr(expr_ty target, expr_ty value, int lineno, int col_offset, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 expr_ty
 _PyAST_BinOp(expr_ty left, operator_ty op, expr_ty right, int lineno, int
-             col_offset, int end_lineno, int end_col_offset, PyArena *arena)
+             col_offset, int end_lineno, int end_col_offset, int node_id,
+             PyArena *arena)
 {
     expr_ty p;
     if (!left) {
@@ -2625,12 +2683,13 @@ _PyAST_BinOp(expr_ty left, operator_ty op, expr_ty right, int lineno, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 expr_ty
 _PyAST_UnaryOp(unaryop_ty op, expr_ty operand, int lineno, int col_offset, int
-               end_lineno, int end_col_offset, PyArena *arena)
+               end_lineno, int end_col_offset, int node_id, PyArena *arena)
 {
     expr_ty p;
     if (!op) {
@@ -2653,12 +2712,13 @@ _PyAST_UnaryOp(unaryop_ty op, expr_ty operand, int lineno, int col_offset, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 expr_ty
 _PyAST_Lambda(arguments_ty args, expr_ty body, int lineno, int col_offset, int
-              end_lineno, int end_col_offset, PyArena *arena)
+              end_lineno, int end_col_offset, int node_id, PyArena *arena)
 {
     expr_ty p;
     if (!args) {
@@ -2681,12 +2741,14 @@ _PyAST_Lambda(arguments_ty args, expr_ty body, int lineno, int col_offset, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 expr_ty
 _PyAST_IfExp(expr_ty test, expr_ty body, expr_ty orelse, int lineno, int
-             col_offset, int end_lineno, int end_col_offset, PyArena *arena)
+             col_offset, int end_lineno, int end_col_offset, int node_id,
+             PyArena *arena)
 {
     expr_ty p;
     if (!test) {
@@ -2715,12 +2777,14 @@ _PyAST_IfExp(expr_ty test, expr_ty body, expr_ty orelse, int lineno, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 expr_ty
 _PyAST_Dict(asdl_expr_seq * keys, asdl_expr_seq * values, int lineno, int
-            col_offset, int end_lineno, int end_col_offset, PyArena *arena)
+            col_offset, int end_lineno, int end_col_offset, int node_id,
+            PyArena *arena)
 {
     expr_ty p;
     p = (expr_ty)_PyArena_Malloc(arena, sizeof(*p));
@@ -2733,12 +2797,13 @@ _PyAST_Dict(asdl_expr_seq * keys, asdl_expr_seq * values, int lineno, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 expr_ty
 _PyAST_Set(asdl_expr_seq * elts, int lineno, int col_offset, int end_lineno,
-           int end_col_offset, PyArena *arena)
+           int end_col_offset, int node_id, PyArena *arena)
 {
     expr_ty p;
     p = (expr_ty)_PyArena_Malloc(arena, sizeof(*p));
@@ -2750,13 +2815,14 @@ _PyAST_Set(asdl_expr_seq * elts, int lineno, int col_offset, int end_lineno,
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 expr_ty
 _PyAST_ListComp(expr_ty elt, asdl_comprehension_seq * generators, int lineno,
-                int col_offset, int end_lineno, int end_col_offset, PyArena
-                *arena)
+                int col_offset, int end_lineno, int end_col_offset, int
+                node_id, PyArena *arena)
 {
     expr_ty p;
     if (!elt) {
@@ -2774,13 +2840,14 @@ _PyAST_ListComp(expr_ty elt, asdl_comprehension_seq * generators, int lineno,
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 expr_ty
 _PyAST_SetComp(expr_ty elt, asdl_comprehension_seq * generators, int lineno,
-               int col_offset, int end_lineno, int end_col_offset, PyArena
-               *arena)
+               int col_offset, int end_lineno, int end_col_offset, int node_id,
+               PyArena *arena)
 {
     expr_ty p;
     if (!elt) {
@@ -2798,13 +2865,14 @@ _PyAST_SetComp(expr_ty elt, asdl_comprehension_seq * generators, int lineno,
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 expr_ty
 _PyAST_DictComp(expr_ty key, expr_ty value, asdl_comprehension_seq *
                 generators, int lineno, int col_offset, int end_lineno, int
-                end_col_offset, PyArena *arena)
+                end_col_offset, int node_id, PyArena *arena)
 {
     expr_ty p;
     if (!key) {
@@ -2828,13 +2896,14 @@ _PyAST_DictComp(expr_ty key, expr_ty value, asdl_comprehension_seq *
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 expr_ty
 _PyAST_GeneratorExp(expr_ty elt, asdl_comprehension_seq * generators, int
                     lineno, int col_offset, int end_lineno, int end_col_offset,
-                    PyArena *arena)
+                    int node_id, PyArena *arena)
 {
     expr_ty p;
     if (!elt) {
@@ -2852,12 +2921,13 @@ _PyAST_GeneratorExp(expr_ty elt, asdl_comprehension_seq * generators, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 expr_ty
 _PyAST_Await(expr_ty value, int lineno, int col_offset, int end_lineno, int
-             end_col_offset, PyArena *arena)
+             end_col_offset, int node_id, PyArena *arena)
 {
     expr_ty p;
     if (!value) {
@@ -2874,12 +2944,13 @@ _PyAST_Await(expr_ty value, int lineno, int col_offset, int end_lineno, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 expr_ty
 _PyAST_Yield(expr_ty value, int lineno, int col_offset, int end_lineno, int
-             end_col_offset, PyArena *arena)
+             end_col_offset, int node_id, PyArena *arena)
 {
     expr_ty p;
     p = (expr_ty)_PyArena_Malloc(arena, sizeof(*p));
@@ -2891,12 +2962,13 @@ _PyAST_Yield(expr_ty value, int lineno, int col_offset, int end_lineno, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 expr_ty
 _PyAST_YieldFrom(expr_ty value, int lineno, int col_offset, int end_lineno, int
-                 end_col_offset, PyArena *arena)
+                 end_col_offset, int node_id, PyArena *arena)
 {
     expr_ty p;
     if (!value) {
@@ -2913,13 +2985,14 @@ _PyAST_YieldFrom(expr_ty value, int lineno, int col_offset, int end_lineno, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 expr_ty
 _PyAST_Compare(expr_ty left, asdl_int_seq * ops, asdl_expr_seq * comparators,
                int lineno, int col_offset, int end_lineno, int end_col_offset,
-               PyArena *arena)
+               int node_id, PyArena *arena)
 {
     expr_ty p;
     if (!left) {
@@ -2938,13 +3011,14 @@ _PyAST_Compare(expr_ty left, asdl_int_seq * ops, asdl_expr_seq * comparators,
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 expr_ty
 _PyAST_Call(expr_ty func, asdl_expr_seq * args, asdl_keyword_seq * keywords,
-            int lineno, int col_offset, int end_lineno, int end_col_offset,
-            PyArena *arena)
+            int lineno, int col_offset, int end_lineno, int end_col_offset, int
+            node_id, PyArena *arena)
 {
     expr_ty p;
     if (!func) {
@@ -2963,13 +3037,14 @@ _PyAST_Call(expr_ty func, asdl_expr_seq * args, asdl_keyword_seq * keywords,
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 expr_ty
 _PyAST_FormattedValue(expr_ty value, int conversion, expr_ty format_spec, int
                       lineno, int col_offset, int end_lineno, int
-                      end_col_offset, PyArena *arena)
+                      end_col_offset, int node_id, PyArena *arena)
 {
     expr_ty p;
     if (!value) {
@@ -2988,12 +3063,13 @@ _PyAST_FormattedValue(expr_ty value, int conversion, expr_ty format_spec, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 expr_ty
 _PyAST_JoinedStr(asdl_expr_seq * values, int lineno, int col_offset, int
-                 end_lineno, int end_col_offset, PyArena *arena)
+                 end_lineno, int end_col_offset, int node_id, PyArena *arena)
 {
     expr_ty p;
     p = (expr_ty)_PyArena_Malloc(arena, sizeof(*p));
@@ -3005,12 +3081,13 @@ _PyAST_JoinedStr(asdl_expr_seq * values, int lineno, int col_offset, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 expr_ty
 _PyAST_Constant(constant value, string kind, int lineno, int col_offset, int
-                end_lineno, int end_col_offset, PyArena *arena)
+                end_lineno, int end_col_offset, int node_id, PyArena *arena)
 {
     expr_ty p;
     if (!value) {
@@ -3028,13 +3105,14 @@ _PyAST_Constant(constant value, string kind, int lineno, int col_offset, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 expr_ty
 _PyAST_Attribute(expr_ty value, identifier attr, expr_context_ty ctx, int
                  lineno, int col_offset, int end_lineno, int end_col_offset,
-                 PyArena *arena)
+                 int node_id, PyArena *arena)
 {
     expr_ty p;
     if (!value) {
@@ -3063,13 +3141,14 @@ _PyAST_Attribute(expr_ty value, identifier attr, expr_context_ty ctx, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 expr_ty
 _PyAST_Subscript(expr_ty value, expr_ty slice, expr_context_ty ctx, int lineno,
-                 int col_offset, int end_lineno, int end_col_offset, PyArena
-                 *arena)
+                 int col_offset, int end_lineno, int end_col_offset, int
+                 node_id, PyArena *arena)
 {
     expr_ty p;
     if (!value) {
@@ -3098,12 +3177,13 @@ _PyAST_Subscript(expr_ty value, expr_ty slice, expr_context_ty ctx, int lineno,
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 expr_ty
 _PyAST_Starred(expr_ty value, expr_context_ty ctx, int lineno, int col_offset,
-               int end_lineno, int end_col_offset, PyArena *arena)
+               int end_lineno, int end_col_offset, int node_id, PyArena *arena)
 {
     expr_ty p;
     if (!value) {
@@ -3126,12 +3206,13 @@ _PyAST_Starred(expr_ty value, expr_context_ty ctx, int lineno, int col_offset,
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 expr_ty
 _PyAST_Name(identifier id, expr_context_ty ctx, int lineno, int col_offset, int
-            end_lineno, int end_col_offset, PyArena *arena)
+            end_lineno, int end_col_offset, int node_id, PyArena *arena)
 {
     expr_ty p;
     if (!id) {
@@ -3154,12 +3235,14 @@ _PyAST_Name(identifier id, expr_context_ty ctx, int lineno, int col_offset, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 expr_ty
 _PyAST_List(asdl_expr_seq * elts, expr_context_ty ctx, int lineno, int
-            col_offset, int end_lineno, int end_col_offset, PyArena *arena)
+            col_offset, int end_lineno, int end_col_offset, int node_id,
+            PyArena *arena)
 {
     expr_ty p;
     if (!ctx) {
@@ -3177,12 +3260,14 @@ _PyAST_List(asdl_expr_seq * elts, expr_context_ty ctx, int lineno, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 expr_ty
 _PyAST_Tuple(asdl_expr_seq * elts, expr_context_ty ctx, int lineno, int
-             col_offset, int end_lineno, int end_col_offset, PyArena *arena)
+             col_offset, int end_lineno, int end_col_offset, int node_id,
+             PyArena *arena)
 {
     expr_ty p;
     if (!ctx) {
@@ -3200,12 +3285,14 @@ _PyAST_Tuple(asdl_expr_seq * elts, expr_context_ty ctx, int lineno, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 expr_ty
 _PyAST_Slice(expr_ty lower, expr_ty upper, expr_ty step, int lineno, int
-             col_offset, int end_lineno, int end_col_offset, PyArena *arena)
+             col_offset, int end_lineno, int end_col_offset, int node_id,
+             PyArena *arena)
 {
     expr_ty p;
     p = (expr_ty)_PyArena_Malloc(arena, sizeof(*p));
@@ -3219,6 +3306,7 @@ _PyAST_Slice(expr_ty lower, expr_ty upper, expr_ty step, int lineno, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
@@ -3250,7 +3338,7 @@ _PyAST_comprehension(expr_ty target, expr_ty iter, asdl_expr_seq * ifs, int
 excepthandler_ty
 _PyAST_ExceptHandler(expr_ty type, identifier name, asdl_stmt_seq * body, int
                      lineno, int col_offset, int end_lineno, int
-                     end_col_offset, PyArena *arena)
+                     end_col_offset, int node_id, PyArena *arena)
 {
     excepthandler_ty p;
     p = (excepthandler_ty)_PyArena_Malloc(arena, sizeof(*p));
@@ -3264,6 +3352,7 @@ _PyAST_ExceptHandler(expr_ty type, identifier name, asdl_stmt_seq * body, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
@@ -3289,7 +3378,8 @@ _PyAST_arguments(asdl_arg_seq * posonlyargs, asdl_arg_seq * args, arg_ty
 
 arg_ty
 _PyAST_arg(identifier arg, expr_ty annotation, string type_comment, int lineno,
-           int col_offset, int end_lineno, int end_col_offset, PyArena *arena)
+           int col_offset, int end_lineno, int end_col_offset, int node_id,
+           PyArena *arena)
 {
     arg_ty p;
     if (!arg) {
@@ -3307,12 +3397,13 @@ _PyAST_arg(identifier arg, expr_ty annotation, string type_comment, int lineno,
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 keyword_ty
 _PyAST_keyword(identifier arg, expr_ty value, int lineno, int col_offset, int
-               end_lineno, int end_col_offset, PyArena *arena)
+               end_lineno, int end_col_offset, int node_id, PyArena *arena)
 {
     keyword_ty p;
     if (!value) {
@@ -3329,12 +3420,13 @@ _PyAST_keyword(identifier arg, expr_ty value, int lineno, int col_offset, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 alias_ty
 _PyAST_alias(identifier name, identifier asname, int lineno, int col_offset,
-             int end_lineno, int end_col_offset, PyArena *arena)
+             int end_lineno, int end_col_offset, int node_id, PyArena *arena)
 {
     alias_ty p;
     if (!name) {
@@ -3351,6 +3443,7 @@ _PyAST_alias(identifier name, identifier asname, int lineno, int col_offset,
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
@@ -3392,7 +3485,7 @@ _PyAST_match_case(pattern_ty pattern, expr_ty guard, asdl_stmt_seq * body,
 
 pattern_ty
 _PyAST_MatchValue(expr_ty value, int lineno, int col_offset, int end_lineno,
-                  int end_col_offset, PyArena *arena)
+                  int end_col_offset, int node_id, PyArena *arena)
 {
     pattern_ty p;
     if (!value) {
@@ -3409,12 +3502,14 @@ _PyAST_MatchValue(expr_ty value, int lineno, int col_offset, int end_lineno,
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 pattern_ty
 _PyAST_MatchSingleton(constant value, int lineno, int col_offset, int
-                      end_lineno, int end_col_offset, PyArena *arena)
+                      end_lineno, int end_col_offset, int node_id, PyArena
+                      *arena)
 {
     pattern_ty p;
     if (!value) {
@@ -3431,12 +3526,14 @@ _PyAST_MatchSingleton(constant value, int lineno, int col_offset, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 pattern_ty
 _PyAST_MatchSequence(asdl_pattern_seq * patterns, int lineno, int col_offset,
-                     int end_lineno, int end_col_offset, PyArena *arena)
+                     int end_lineno, int end_col_offset, int node_id, PyArena
+                     *arena)
 {
     pattern_ty p;
     p = (pattern_ty)_PyArena_Malloc(arena, sizeof(*p));
@@ -3448,13 +3545,14 @@ _PyAST_MatchSequence(asdl_pattern_seq * patterns, int lineno, int col_offset,
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 pattern_ty
 _PyAST_MatchMapping(asdl_expr_seq * keys, asdl_pattern_seq * patterns,
                     identifier rest, int lineno, int col_offset, int
-                    end_lineno, int end_col_offset, PyArena *arena)
+                    end_lineno, int end_col_offset, int node_id, PyArena *arena)
 {
     pattern_ty p;
     p = (pattern_ty)_PyArena_Malloc(arena, sizeof(*p));
@@ -3468,14 +3566,15 @@ _PyAST_MatchMapping(asdl_expr_seq * keys, asdl_pattern_seq * patterns,
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 pattern_ty
 _PyAST_MatchClass(expr_ty cls, asdl_pattern_seq * patterns, asdl_identifier_seq
                   * kwd_attrs, asdl_pattern_seq * kwd_patterns, int lineno, int
-                  col_offset, int end_lineno, int end_col_offset, PyArena
-                  *arena)
+                  col_offset, int end_lineno, int end_col_offset, int node_id,
+                  PyArena *arena)
 {
     pattern_ty p;
     if (!cls) {
@@ -3495,12 +3594,13 @@ _PyAST_MatchClass(expr_ty cls, asdl_pattern_seq * patterns, asdl_identifier_seq
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 pattern_ty
 _PyAST_MatchStar(identifier name, int lineno, int col_offset, int end_lineno,
-                 int end_col_offset, PyArena *arena)
+                 int end_col_offset, int node_id, PyArena *arena)
 {
     pattern_ty p;
     p = (pattern_ty)_PyArena_Malloc(arena, sizeof(*p));
@@ -3512,12 +3612,13 @@ _PyAST_MatchStar(identifier name, int lineno, int col_offset, int end_lineno,
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 pattern_ty
 _PyAST_MatchAs(pattern_ty pattern, identifier name, int lineno, int col_offset,
-               int end_lineno, int end_col_offset, PyArena *arena)
+               int end_lineno, int end_col_offset, int node_id, PyArena *arena)
 {
     pattern_ty p;
     p = (pattern_ty)_PyArena_Malloc(arena, sizeof(*p));
@@ -3530,12 +3631,13 @@ _PyAST_MatchAs(pattern_ty pattern, identifier name, int lineno, int col_offset,
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
 pattern_ty
 _PyAST_MatchOr(asdl_pattern_seq * patterns, int lineno, int col_offset, int
-               end_lineno, int end_col_offset, PyArena *arena)
+               end_lineno, int end_col_offset, int node_id, PyArena *arena)
 {
     pattern_ty p;
     p = (pattern_ty)_PyArena_Malloc(arena, sizeof(*p));
@@ -3547,6 +3649,7 @@ _PyAST_MatchOr(asdl_pattern_seq * patterns, int lineno, int col_offset, int
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    p->node_id = node_id;
     return p;
 }
 
@@ -4164,6 +4267,11 @@ ast2obj_stmt(struct ast_state *state, void* _o)
     if (PyObject_SetAttr(result, state->end_col_offset, value) < 0)
         goto failed;
     Py_DECREF(value);
+    value = ast2obj_int(state, o->node_id);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->node_id, value) < 0)
+        goto failed;
+    Py_DECREF(value);
     return result;
 failed:
     Py_XDECREF(value);
@@ -4641,6 +4749,11 @@ ast2obj_expr(struct ast_state *state, void* _o)
     if (PyObject_SetAttr(result, state->end_col_offset, value) < 0)
         goto failed;
     Py_DECREF(value);
+    value = ast2obj_int(state, o->node_id);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->node_id, value) < 0)
+        goto failed;
+    Py_DECREF(value);
     return result;
 failed:
     Py_XDECREF(value);
@@ -4865,6 +4978,11 @@ ast2obj_excepthandler(struct ast_state *state, void* _o)
     if (PyObject_SetAttr(result, state->end_col_offset, value) < 0)
         goto failed;
     Py_DECREF(value);
+    value = ast2obj_int(state, o->node_id);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->node_id, value) < 0)
+        goto failed;
+    Py_DECREF(value);
     return result;
 failed:
     Py_XDECREF(value);
@@ -4973,6 +5091,11 @@ ast2obj_arg(struct ast_state *state, void* _o)
     if (PyObject_SetAttr(result, state->end_col_offset, value) < 0)
         goto failed;
     Py_DECREF(value);
+    value = ast2obj_int(state, o->node_id);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->node_id, value) < 0)
+        goto failed;
+    Py_DECREF(value);
     return result;
 failed:
     Py_XDECREF(value);
@@ -5022,6 +5145,11 @@ ast2obj_keyword(struct ast_state *state, void* _o)
     if (PyObject_SetAttr(result, state->end_col_offset, value) < 0)
         goto failed;
     Py_DECREF(value);
+    value = ast2obj_int(state, o->node_id);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->node_id, value) < 0)
+        goto failed;
+    Py_DECREF(value);
     return result;
 failed:
     Py_XDECREF(value);
@@ -5069,6 +5197,11 @@ ast2obj_alias(struct ast_state *state, void* _o)
     value = ast2obj_int(state, o->end_col_offset);
     if (!value) goto failed;
     if (PyObject_SetAttr(result, state->end_col_offset, value) < 0)
+        goto failed;
+    Py_DECREF(value);
+    value = ast2obj_int(state, o->node_id);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->node_id, value) < 0)
         goto failed;
     Py_DECREF(value);
     return result;
@@ -5287,6 +5420,11 @@ ast2obj_pattern(struct ast_state *state, void* _o)
     value = ast2obj_int(state, o->end_col_offset);
     if (!value) goto failed;
     if (PyObject_SetAttr(result, state->end_col_offset, value) < 0)
+        goto failed;
+    Py_DECREF(value);
+    value = ast2obj_int(state, o->node_id);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->node_id, value) < 0)
         goto failed;
     Py_DECREF(value);
     return result;
@@ -5569,6 +5707,7 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, PyArena*
     int col_offset;
     int end_lineno;
     int end_col_offset;
+    int node_id;
 
     if (obj == Py_None) {
         *out = NULL;
@@ -5623,6 +5762,19 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, PyArena*
     else {
         int res;
         res = obj2ast_int(state, tmp, &end_col_offset, arena);
+        if (res != 0) goto failed;
+        Py_CLEAR(tmp);
+    }
+    if (_PyObject_LookupAttr(obj, state->node_id, &tmp) < 0) {
+        return 1;
+    }
+    if (tmp == NULL || tmp == Py_None) {
+        Py_CLEAR(tmp);
+        node_id = 0;
+    }
+    else {
+        int res;
+        res = obj2ast_int(state, tmp, &node_id, arena);
         if (res != 0) goto failed;
         Py_CLEAR(tmp);
     }
@@ -5759,7 +5911,7 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, PyArena*
         }
         *out = _PyAST_FunctionDef(name, args, body, decorator_list, returns,
                                   type_comment, lineno, col_offset, end_lineno,
-                                  end_col_offset, arena);
+                                  end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -5897,7 +6049,7 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, PyArena*
         *out = _PyAST_AsyncFunctionDef(name, args, body, decorator_list,
                                        returns, type_comment, lineno,
                                        col_offset, end_lineno, end_col_offset,
-                                       arena);
+                                       node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -6060,7 +6212,7 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, PyArena*
         }
         *out = _PyAST_ClassDef(name, bases, keywords, body, decorator_list,
                                lineno, col_offset, end_lineno, end_col_offset,
-                               arena);
+                               node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -6086,7 +6238,7 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_Return(value, lineno, col_offset, end_lineno,
-                             end_col_offset, arena);
+                             end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -6132,7 +6284,7 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_Delete(targets, lineno, col_offset, end_lineno,
-                             end_col_offset, arena);
+                             end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -6206,7 +6358,7 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_Assign(targets, value, type_comment, lineno, col_offset,
-                             end_lineno, end_col_offset, arena);
+                             end_lineno, end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -6260,7 +6412,7 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_AugAssign(target, op, value, lineno, col_offset,
-                                end_lineno, end_col_offset, arena);
+                                end_lineno, end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -6328,7 +6480,8 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_AnnAssign(target, annotation, value, simple, lineno,
-                                col_offset, end_lineno, end_col_offset, arena);
+                                col_offset, end_lineno, end_col_offset,
+                                node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -6450,7 +6603,8 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_For(target, iter, body, orelse, type_comment, lineno,
-                          col_offset, end_lineno, end_col_offset, arena);
+                          col_offset, end_lineno, end_col_offset, node_id,
+                          arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -6573,7 +6727,7 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, PyArena*
         }
         *out = _PyAST_AsyncFor(target, iter, body, orelse, type_comment,
                                lineno, col_offset, end_lineno, end_col_offset,
-                               arena);
+                               node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -6667,7 +6821,7 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_While(test, body, orelse, lineno, col_offset, end_lineno,
-                            end_col_offset, arena);
+                            end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -6761,7 +6915,7 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_If(test, body, orelse, lineno, col_offset, end_lineno,
-                         end_col_offset, arena);
+                         end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -6855,7 +7009,7 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_With(items, body, type_comment, lineno, col_offset,
-                           end_lineno, end_col_offset, arena);
+                           end_lineno, end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -6949,7 +7103,7 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_AsyncWith(items, body, type_comment, lineno, col_offset,
-                                end_lineno, end_col_offset, arena);
+                                end_lineno, end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -7009,7 +7163,7 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_Match(subject, cases, lineno, col_offset, end_lineno,
-                            end_col_offset, arena);
+                            end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -7049,7 +7203,7 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_Raise(exc, cause, lineno, col_offset, end_lineno,
-                            end_col_offset, arena);
+                            end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -7197,7 +7351,8 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_Try(body, handlers, orelse, finalbody, lineno,
-                          col_offset, end_lineno, end_col_offset, arena);
+                          col_offset, end_lineno, end_col_offset, node_id,
+                          arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -7237,7 +7392,7 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_Assert(test, msg, lineno, col_offset, end_lineno,
-                             end_col_offset, arena);
+                             end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -7283,7 +7438,7 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_Import(names, lineno, col_offset, end_lineno,
-                             end_col_offset, arena);
+                             end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -7357,7 +7512,7 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_ImportFrom(module, names, level, lineno, col_offset,
-                                 end_lineno, end_col_offset, arena);
+                                 end_lineno, end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -7403,7 +7558,7 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_Global(names, lineno, col_offset, end_lineno,
-                             end_col_offset, arena);
+                             end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -7449,7 +7604,7 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_Nonlocal(names, lineno, col_offset, end_lineno,
-                               end_col_offset, arena);
+                               end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -7475,7 +7630,7 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_Expr(value, lineno, col_offset, end_lineno,
-                           end_col_offset, arena);
+                           end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -7487,7 +7642,7 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, PyArena*
     if (isinstance) {
 
         *out = _PyAST_Pass(lineno, col_offset, end_lineno, end_col_offset,
-                           arena);
+                           node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -7499,7 +7654,7 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, PyArena*
     if (isinstance) {
 
         *out = _PyAST_Break(lineno, col_offset, end_lineno, end_col_offset,
-                            arena);
+                            node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -7511,7 +7666,7 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, PyArena*
     if (isinstance) {
 
         *out = _PyAST_Continue(lineno, col_offset, end_lineno, end_col_offset,
-                               arena);
+                               node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -7534,6 +7689,7 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
     int col_offset;
     int end_lineno;
     int end_col_offset;
+    int node_id;
 
     if (obj == Py_None) {
         *out = NULL;
@@ -7588,6 +7744,19 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
     else {
         int res;
         res = obj2ast_int(state, tmp, &end_col_offset, arena);
+        if (res != 0) goto failed;
+        Py_CLEAR(tmp);
+    }
+    if (_PyObject_LookupAttr(obj, state->node_id, &tmp) < 0) {
+        return 1;
+    }
+    if (tmp == NULL || tmp == Py_None) {
+        Py_CLEAR(tmp);
+        node_id = 0;
+    }
+    else {
+        int res;
+        res = obj2ast_int(state, tmp, &node_id, arena);
         if (res != 0) goto failed;
         Py_CLEAR(tmp);
     }
@@ -7647,7 +7816,7 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_BoolOp(op, values, lineno, col_offset, end_lineno,
-                             end_col_offset, arena);
+                             end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -7687,7 +7856,7 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_NamedExpr(target, value, lineno, col_offset, end_lineno,
-                                end_col_offset, arena);
+                                end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -7741,7 +7910,7 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_BinOp(left, op, right, lineno, col_offset, end_lineno,
-                            end_col_offset, arena);
+                            end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -7781,7 +7950,7 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_UnaryOp(op, operand, lineno, col_offset, end_lineno,
-                              end_col_offset, arena);
+                              end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -7821,7 +7990,7 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_Lambda(args, body, lineno, col_offset, end_lineno,
-                             end_col_offset, arena);
+                             end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -7875,7 +8044,7 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_IfExp(test, body, orelse, lineno, col_offset, end_lineno,
-                            end_col_offset, arena);
+                            end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -7955,7 +8124,7 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_Dict(keys, values, lineno, col_offset, end_lineno,
-                           end_col_offset, arena);
+                           end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -8001,7 +8170,7 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_Set(elts, lineno, col_offset, end_lineno, end_col_offset,
-                          arena);
+                          node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -8061,7 +8230,7 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_ListComp(elt, generators, lineno, col_offset, end_lineno,
-                               end_col_offset, arena);
+                               end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -8121,7 +8290,7 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_SetComp(elt, generators, lineno, col_offset, end_lineno,
-                              end_col_offset, arena);
+                              end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -8195,7 +8364,7 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_DictComp(key, value, generators, lineno, col_offset,
-                               end_lineno, end_col_offset, arena);
+                               end_lineno, end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -8255,7 +8424,7 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_GeneratorExp(elt, generators, lineno, col_offset,
-                                   end_lineno, end_col_offset, arena);
+                                   end_lineno, end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -8281,7 +8450,7 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_Await(value, lineno, col_offset, end_lineno,
-                            end_col_offset, arena);
+                            end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -8307,7 +8476,7 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_Yield(value, lineno, col_offset, end_lineno,
-                            end_col_offset, arena);
+                            end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -8333,7 +8502,7 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_YieldFrom(value, lineno, col_offset, end_lineno,
-                                end_col_offset, arena);
+                                end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -8427,7 +8596,7 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_Compare(left, ops, comparators, lineno, col_offset,
-                              end_lineno, end_col_offset, arena);
+                              end_lineno, end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -8521,7 +8690,7 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_Call(func, args, keywords, lineno, col_offset,
-                           end_lineno, end_col_offset, arena);
+                           end_lineno, end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -8576,7 +8745,7 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
         }
         *out = _PyAST_FormattedValue(value, conversion, format_spec, lineno,
                                      col_offset, end_lineno, end_col_offset,
-                                     arena);
+                                     node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -8622,7 +8791,7 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_JoinedStr(values, lineno, col_offset, end_lineno,
-                                end_col_offset, arena);
+                                end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -8662,7 +8831,7 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_Constant(value, kind, lineno, col_offset, end_lineno,
-                               end_col_offset, arena);
+                               end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -8716,7 +8885,7 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_Attribute(value, attr, ctx, lineno, col_offset,
-                                end_lineno, end_col_offset, arena);
+                                end_lineno, end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -8770,7 +8939,7 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_Subscript(value, slice, ctx, lineno, col_offset,
-                                end_lineno, end_col_offset, arena);
+                                end_lineno, end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -8810,7 +8979,7 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_Starred(value, ctx, lineno, col_offset, end_lineno,
-                              end_col_offset, arena);
+                              end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -8850,7 +9019,7 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_Name(id, ctx, lineno, col_offset, end_lineno,
-                           end_col_offset, arena);
+                           end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -8910,7 +9079,7 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_List(elts, ctx, lineno, col_offset, end_lineno,
-                           end_col_offset, arena);
+                           end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -8970,7 +9139,7 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_Tuple(elts, ctx, lineno, col_offset, end_lineno,
-                            end_col_offset, arena);
+                            end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -9024,7 +9193,7 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_Slice(lower, upper, step, lineno, col_offset, end_lineno,
-                            end_col_offset, arena);
+                            end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -9447,6 +9616,7 @@ obj2ast_excepthandler(struct ast_state *state, PyObject* obj, excepthandler_ty*
     int col_offset;
     int end_lineno;
     int end_col_offset;
+    int node_id;
 
     if (obj == Py_None) {
         *out = NULL;
@@ -9501,6 +9671,19 @@ obj2ast_excepthandler(struct ast_state *state, PyObject* obj, excepthandler_ty*
     else {
         int res;
         res = obj2ast_int(state, tmp, &end_col_offset, arena);
+        if (res != 0) goto failed;
+        Py_CLEAR(tmp);
+    }
+    if (_PyObject_LookupAttr(obj, state->node_id, &tmp) < 0) {
+        return 1;
+    }
+    if (tmp == NULL || tmp == Py_None) {
+        Py_CLEAR(tmp);
+        node_id = 0;
+    }
+    else {
+        int res;
+        res = obj2ast_int(state, tmp, &node_id, arena);
         if (res != 0) goto failed;
         Py_CLEAR(tmp);
     }
@@ -9574,7 +9757,7 @@ obj2ast_excepthandler(struct ast_state *state, PyObject* obj, excepthandler_ty*
             Py_CLEAR(tmp);
         }
         *out = _PyAST_ExceptHandler(type, name, body, lineno, col_offset,
-                                    end_lineno, end_col_offset, arena);
+                                    end_lineno, end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -9808,6 +9991,7 @@ obj2ast_arg(struct ast_state *state, PyObject* obj, arg_ty* out, PyArena* arena)
     int col_offset;
     int end_lineno;
     int end_col_offset;
+    int node_id;
 
     if (_PyObject_LookupAttr(obj, state->arg, &tmp) < 0) {
         return 1;
@@ -9900,8 +10084,21 @@ obj2ast_arg(struct ast_state *state, PyObject* obj, arg_ty* out, PyArena* arena)
         if (res != 0) goto failed;
         Py_CLEAR(tmp);
     }
+    if (_PyObject_LookupAttr(obj, state->node_id, &tmp) < 0) {
+        return 1;
+    }
+    if (tmp == NULL || tmp == Py_None) {
+        Py_CLEAR(tmp);
+        node_id = 0;
+    }
+    else {
+        int res;
+        res = obj2ast_int(state, tmp, &node_id, arena);
+        if (res != 0) goto failed;
+        Py_CLEAR(tmp);
+    }
     *out = _PyAST_arg(arg, annotation, type_comment, lineno, col_offset,
-                      end_lineno, end_col_offset, arena);
+                      end_lineno, end_col_offset, node_id, arena);
     return 0;
 failed:
     Py_XDECREF(tmp);
@@ -9919,6 +10116,7 @@ obj2ast_keyword(struct ast_state *state, PyObject* obj, keyword_ty* out,
     int col_offset;
     int end_lineno;
     int end_col_offset;
+    int node_id;
 
     if (_PyObject_LookupAttr(obj, state->arg, &tmp) < 0) {
         return 1;
@@ -9998,8 +10196,21 @@ obj2ast_keyword(struct ast_state *state, PyObject* obj, keyword_ty* out,
         if (res != 0) goto failed;
         Py_CLEAR(tmp);
     }
+    if (_PyObject_LookupAttr(obj, state->node_id, &tmp) < 0) {
+        return 1;
+    }
+    if (tmp == NULL || tmp == Py_None) {
+        Py_CLEAR(tmp);
+        node_id = 0;
+    }
+    else {
+        int res;
+        res = obj2ast_int(state, tmp, &node_id, arena);
+        if (res != 0) goto failed;
+        Py_CLEAR(tmp);
+    }
     *out = _PyAST_keyword(arg, value, lineno, col_offset, end_lineno,
-                          end_col_offset, arena);
+                          end_col_offset, node_id, arena);
     return 0;
 failed:
     Py_XDECREF(tmp);
@@ -10017,6 +10228,7 @@ obj2ast_alias(struct ast_state *state, PyObject* obj, alias_ty* out, PyArena*
     int col_offset;
     int end_lineno;
     int end_col_offset;
+    int node_id;
 
     if (_PyObject_LookupAttr(obj, state->name, &tmp) < 0) {
         return 1;
@@ -10096,8 +10308,21 @@ obj2ast_alias(struct ast_state *state, PyObject* obj, alias_ty* out, PyArena*
         if (res != 0) goto failed;
         Py_CLEAR(tmp);
     }
+    if (_PyObject_LookupAttr(obj, state->node_id, &tmp) < 0) {
+        return 1;
+    }
+    if (tmp == NULL || tmp == Py_None) {
+        Py_CLEAR(tmp);
+        node_id = 0;
+    }
+    else {
+        int res;
+        res = obj2ast_int(state, tmp, &node_id, arena);
+        if (res != 0) goto failed;
+        Py_CLEAR(tmp);
+    }
     *out = _PyAST_alias(name, asname, lineno, col_offset, end_lineno,
-                        end_col_offset, arena);
+                        end_col_offset, node_id, arena);
     return 0;
 failed:
     Py_XDECREF(tmp);
@@ -10232,6 +10457,7 @@ obj2ast_pattern(struct ast_state *state, PyObject* obj, pattern_ty* out,
     int col_offset;
     int end_lineno;
     int end_col_offset;
+    int node_id;
 
     if (obj == Py_None) {
         *out = NULL;
@@ -10289,6 +10515,19 @@ obj2ast_pattern(struct ast_state *state, PyObject* obj, pattern_ty* out,
         if (res != 0) goto failed;
         Py_CLEAR(tmp);
     }
+    if (_PyObject_LookupAttr(obj, state->node_id, &tmp) < 0) {
+        return 1;
+    }
+    if (tmp == NULL || tmp == Py_None) {
+        Py_CLEAR(tmp);
+        node_id = 0;
+    }
+    else {
+        int res;
+        res = obj2ast_int(state, tmp, &node_id, arena);
+        if (res != 0) goto failed;
+        Py_CLEAR(tmp);
+    }
     tp = state->MatchValue_type;
     isinstance = PyObject_IsInstance(obj, tp);
     if (isinstance == -1) {
@@ -10311,7 +10550,7 @@ obj2ast_pattern(struct ast_state *state, PyObject* obj, pattern_ty* out,
             Py_CLEAR(tmp);
         }
         *out = _PyAST_MatchValue(value, lineno, col_offset, end_lineno,
-                                 end_col_offset, arena);
+                                 end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -10337,7 +10576,7 @@ obj2ast_pattern(struct ast_state *state, PyObject* obj, pattern_ty* out,
             Py_CLEAR(tmp);
         }
         *out = _PyAST_MatchSingleton(value, lineno, col_offset, end_lineno,
-                                     end_col_offset, arena);
+                                     end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -10383,7 +10622,7 @@ obj2ast_pattern(struct ast_state *state, PyObject* obj, pattern_ty* out,
             Py_CLEAR(tmp);
         }
         *out = _PyAST_MatchSequence(patterns, lineno, col_offset, end_lineno,
-                                    end_col_offset, arena);
+                                    end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -10477,7 +10716,7 @@ obj2ast_pattern(struct ast_state *state, PyObject* obj, pattern_ty* out,
             Py_CLEAR(tmp);
         }
         *out = _PyAST_MatchMapping(keys, patterns, rest, lineno, col_offset,
-                                   end_lineno, end_col_offset, arena);
+                                   end_lineno, end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -10606,7 +10845,7 @@ obj2ast_pattern(struct ast_state *state, PyObject* obj, pattern_ty* out,
         }
         *out = _PyAST_MatchClass(cls, patterns, kwd_attrs, kwd_patterns,
                                  lineno, col_offset, end_lineno,
-                                 end_col_offset, arena);
+                                 end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -10632,7 +10871,7 @@ obj2ast_pattern(struct ast_state *state, PyObject* obj, pattern_ty* out,
             Py_CLEAR(tmp);
         }
         *out = _PyAST_MatchStar(name, lineno, col_offset, end_lineno,
-                                end_col_offset, arena);
+                                end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -10672,7 +10911,7 @@ obj2ast_pattern(struct ast_state *state, PyObject* obj, pattern_ty* out,
             Py_CLEAR(tmp);
         }
         *out = _PyAST_MatchAs(pattern, name, lineno, col_offset, end_lineno,
-                              end_col_offset, arena);
+                              end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -10718,7 +10957,7 @@ obj2ast_pattern(struct ast_state *state, PyObject* obj, pattern_ty* out,
             Py_CLEAR(tmp);
         }
         *out = _PyAST_MatchOr(patterns, lineno, col_offset, end_lineno,
-                              end_col_offset, arena);
+                              end_col_offset, node_id, arena);
         if (*out == NULL) goto failed;
         return 0;
     }

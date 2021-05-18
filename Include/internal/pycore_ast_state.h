@@ -214,6 +214,7 @@ struct ast_state {
     PyObject *msg;
     PyObject *name;
     PyObject *names;
+    PyObject *node_id;
     PyObject *op;
     PyObject *operand;
     PyObject *operator_type;
