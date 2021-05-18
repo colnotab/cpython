@@ -535,13 +535,30 @@ _Py_AnnotateError(PyObject *f, PyObject *filename, PyTracebackObject *tb)
     
     int start_line, end_line, start_col, end_col;
     void *node = _PyAST_FindTaggedNode(tree, tag, &start_line, &end_line, &start_col, &end_col);
+
+    _PyArena_Free(arena);
     if (!node) {
         // can't locate the node
         return 0;
     }
     
-    printf("x: %d, y: %d\n", start_col, end_col);
-    return 0;
+
+    int err = 0;
+    int offset = 0;
+    while (++offset <= start_col) {
+        err = PyFile_WriteString(" ", f);
+        if (err < 0) {
+            return err;
+        }
+    }
+    while (++offset <= end_col + 1) {
+        err = PyFile_WriteString("^", f);
+        if (err < 0) {
+            return err;
+        }
+    }
+
+    return PyFile_WriteString("\n", f);
 }
 
 static int
