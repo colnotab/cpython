@@ -632,7 +632,21 @@ struct _type_ignore {
 
 
 enum _tagged_kind {stmt_kind=0, expr_kind=1, excepthandler_kind=2, arg_kind=3,
-                   keyword_kind=4, alias_kind=5, pattern_kind=6};
+                    keyword_kind=4, alias_kind=5, pattern_kind=6};
+struct _tagged {
+    enum _tagged_kind kind;
+    union {
+        stmt_ty stmt;
+        expr_ty expr;
+        excepthandler_ty excepthandler;
+        arg_ty arg;
+        keyword_ty keyword;
+        alias_ty alias;
+        pattern_ty pattern;
+    } v;
+};
+
+typedef struct _tagged *TaggedAST;
 
 // Note: these macros affect function definitions, not only call sites.
 mod_ty _PyAST_Module(asdl_stmt_seq * body, asdl_type_ignore_seq * type_ignores,

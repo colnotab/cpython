@@ -274,6 +274,7 @@ class TaggedKindVisitor(EmitVisitor):
                 tagged_structs.append(dfn)
 
         self.emit_tagged_kind(tagged_structs)
+        self.emit_tagged_struct(tagged_structs)
 
     def emit_tagged_kind(self, dfns):
         enum = ", ".join(
@@ -282,6 +283,16 @@ class TaggedKindVisitor(EmitVisitor):
         )
         self.emit(f"enum _tagged_kind {{{enum}}};", 0)
 
+    def emit_tagged_struct(self, dfns):
+        self.emit("struct _tagged {", 0)
+        self.emit("enum _tagged_kind kind;", 1)
+        self.emit("union {", 1)
+        for dfn in dfns:
+            self.emit(f"{dfn.name}_ty {dfn.name};", 2)
+        self.emit("} v;", 1)
+        self.emit("};", 0)
+        self.emit("", 0)
+        self.emit("typedef struct _tagged *TaggedAST;", 0)
 
 def ast_func_name(name):
     return f"_PyAST_{name}"
