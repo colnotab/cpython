@@ -7,6 +7,13 @@
 #include "frameobject.h"          // PyFrame_GetBack()
 #include "structmember.h"         // PyMemberDef
 #include "osdefs.h"               // SEP
+
+#include "compile.h"
+#include "pycore_ast.h"
+#include "pycore_parser.h"
+#include "pycore_fileutils.h"
+#define _TRACEBACK_SOURCE_LINE_INDENT 4
+
 #ifdef HAVE_FCNTL_H
 #include <fcntl.h>
 #endif
@@ -368,8 +375,10 @@ finally:
     return result;
 }
 
+
+
 int
-_Py_DisplaySourceLine(PyObject *f, PyObject *filename, int lineno, int indent)
+_Py_DisplaySourceLine(PyObject *f, PyObject *filename, int lineno, int indent, int *truncation)
 {
     int err = 0;
     int fd;
@@ -479,6 +488,10 @@ _Py_DisplaySourceLine(PyObject *f, PyObject *filename, int lineno, int indent)
         }
     }
 
+    if (truncation != NULL) {
+        *truncation = i - indent;
+    }
+
     /* Write some spaces before the line */
     strcpy(buf, "          ");
     assert (strlen(buf) == 10);
@@ -500,13 +513,8 @@ _Py_DisplaySourceLine(PyObject *f, PyObject *filename, int lineno, int indent)
     return err;
 }
 
-#include "compile.h"
-#include "pycore_ast.h"
-#include "pycore_parser.h"
-#include "pycore_fileutils.h" 
-
 static int
-_Py_AnnotateError(PyObject *f, PyObject *filename, PyTracebackObject *tb)
+_Py_AnnotateError(PyObject *f, PyObject *filename, PyTracebackObject *tb, int offset)
 {
     // borrowed
     PyObject *node_id = PyTuple_GetItem(tb->tb_frame->f_code->co_nodeids, tb->tb_lasti / 2);
@@ -541,10 +549,8 @@ _Py_AnnotateError(PyObject *f, PyObject *filename, PyTracebackObject *tb)
         // can't locate the node
         return 0;
     }
-    
 
     int err = 0;
-    int offset = 0;
     while (++offset <= start_col) {
         err = PyFile_WriteString(" ", f);
         if (err < 0) {
@@ -578,9 +584,11 @@ tb_displayline(PyObject *f, PyObject *filename, int lineno, PyObject *name,
     Py_DECREF(line);
     if (err != 0)
         return err;
+
+    int truncation = _TRACEBACK_SOURCE_LINE_INDENT;
     /* ignore errors since we can't report them, can we? */
-    if (_Py_DisplaySourceLine(f, filename, lineno, 4) ||
-        _Py_AnnotateError(f, filename, tb)) {
+    if (_Py_DisplaySourceLine(f, filename, lineno, truncation, &truncation) ||
+        _Py_AnnotateError(f, filename, tb, truncation)) {
         PyErr_Clear();
     }
     return err;

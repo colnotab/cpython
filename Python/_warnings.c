@@ -543,7 +543,8 @@ show_warning(PyObject *filename, int lineno, PyObject *text,
         PyFile_WriteString("\n", f_stderr);
     }
     else {
-        _Py_DisplaySourceLine(f_stderr, filename, lineno, 2);
+        int _truncation = 0;
+        _Py_DisplaySourceLine(f_stderr, filename, lineno, 2, &_truncation);
     }
 
 error:
