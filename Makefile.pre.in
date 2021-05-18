@@ -391,6 +391,7 @@ PYTHON_OBJS=	\
 		Python/formatter_unicode.o \
 		Python/fileutils.o \
 		Python/suggestions.o \
+		Python/node_finder.o \
 		Python/$(DYNLOADFILE) \
 		$(LIBOBJS) \
 		$(MACHDEP_OBJS) \

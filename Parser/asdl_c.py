@@ -1319,20 +1319,32 @@ class ObjVisitor(PickleVisitor):
             self.emit("value = ast2obj_%s(state, %s);" % (field.type, value), depth, reflow=False)
 
 
-class FinderVisitor(PickleVisitor):
+class FinderHeaderVisitor(PickleVisitor):
+    def visitSum(self, node, name):
+        self.emit_header(name)
+
+    def visitProduct(self, node, name):
+        self.emit_header(name)
+
+    def emit_header(self, name):
+        self.emit(f"void * find_{name}({name}_ty, int);", 0)
+
+class FinderBodyVisitor(PickleVisitor):
     from contextlib import contextmanager
 
     def visitSum(self, node, name):
         # simple sums don't have tags and
         # don't contain any other children
-        if is_simple(node):
-            return None
-
         with self.emit_finder(node, name) as depth:
+            if is_simple(node):
+                return None
+
             self.emit("switch (node->kind) {", depth)
             for constructor in node.types:
-                self.emit(f"case {constructor.name}_kind:", depth + 1)
-                self.emit_traversers(constructor.fields, depth + 2)
+                self.emit(f"case {constructor.name}_kind: {{", depth + 1)
+                self.emit_traversers(constructor.fields, depth + 2, belong_to=constructor.name)
+                self.emit("break;", depth + 2)
+                self.emit("}", depth + 1)
             self.emit("}", depth)
 
     def visitProduct(self, node, name):
@@ -1342,9 +1354,8 @@ class FinderVisitor(PickleVisitor):
     @contextmanager
     def emit_finder(self, node, name):
         self.emit("void *", 0)
-        self.emit(f"find_{name}({name}_ty node, int tag, int *flag)", 0)
+        self.emit(f"find_{name}({name}_ty node, int tag)", 0)
         self.emit("{", 0)
-        self.emit("int _i = 0;", 1);
         self.emit("void *result = NULL;", 1);
         if any(field.name == NODE_TAG for field in node.attributes):
             self.emit(f"if (node->{NODE_TAG} == tag) {{", 1);
@@ -1354,7 +1365,7 @@ class FinderVisitor(PickleVisitor):
         self.emit("return result;", 1)
         self.emit("}", 0)
 
-    def emit_traversers(self, fields, depth):
+    def emit_traversers(self, fields, depth, belong_to=None):
         for field in fields:
             if field.seq:
                 traverser = "TRAVERSE_SEQ"
@@ -1364,8 +1375,11 @@ class FinderVisitor(PickleVisitor):
             if field.type in asdl.builtin_types:
                 continue
 
-            self.emit(f"{traverser}({field.type}, node->{field.name});", depth)
+            pointer = field.name
+            if belong_to is not None:
+                pointer = f"v.{belong_to}.{pointer}"
 
+            self.emit(f"{traverser}({field.type}, node->{pointer});", depth)
 
 
 class PartingShots(StaticVisitor):
@@ -1538,21 +1552,22 @@ def generate_module_def(mod, f, internal_h):
 
 def generate_finder_def(mod, f):
     f.write(textwrap.dedent("""\
+    #include "Python.h"
+    #include "pycore_ast.h"
     #define TRAVERSE(TYPE, NODE) { \\
         if ((NODE)) { \\
-            result = traverse ## TYPE((NODE), tag, flag); \\
-            if (*flag) { \\
-                return NULL; \\
-            } else if (result) { \\
+            result = find_ ## TYPE((NODE), tag); \\
+            if (result) { \\
                 return result; \\
             } \\
         } \\
     }
 
     #define TRAVERSE_SEQ(TYPE, SEQ) { \\
+        int _i; \\
         for (_i = 0; _i < asdl_seq_LEN((SEQ)); _i++) { \\
             TYPE ## _ty elt = (TYPE ## _ty)asdl_seq_GET((SEQ), _i); \\
-            TRAVERSE((TYPE), elt); \\
+            TRAVERSE(TYPE, elt); \\
         } \\
     }
     """))
@@ -1563,10 +1578,7 @@ def generate_finder_func(mod, f):
     void *
     find_node(mod_ty tree, int tag)
     {
-        int error_flag = 0;
-        void *result = find_mod(tree, tag, *error_flag);
-        assert(result == NULL || !error_flag);
-        return result;
+        return find_mod(tree, tag);
     }
     """))
 
@@ -1659,7 +1671,10 @@ def write_source(mod, f, internal_h_file):
 def write_finder(mod, f):
     generate_finder_def(mod, f)
 
-    v = FinderVisitor(f)
+    v = ChainOfVisitors(
+        FinderHeaderVisitor(f),
+        FinderBodyVisitor(f)
+    )
     v.visit(mod)
 
     generate_finder_func(mod, f)
