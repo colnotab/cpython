@@ -1320,6 +1320,33 @@ class ObjVisitor(PickleVisitor):
             self.emit("value = ast2obj_%s(state, %s);" % (field.type, value), depth, reflow=False)
 
 
+class FinderVisitor(PickleVisitor):
+    from contextlib import contextmanager
+
+    def visitSum(self, name, node):
+        ...
+
+    def visitProduct(self, prod, name):
+        with self.emit_finder(name) as depth:
+            for field in prod.fields:
+                if field.seq:
+                    traverser = "TRAVERSE_SEQ"
+                else:
+                    traverser = "TRAVERSE"
+
+                self.emit(f"{traverser}({field.type}, node->{field.name});", depth)
+
+    @contextmanager
+    def emit_finder(self, name):
+        self.emit("void *", 0)
+        self.emit(f"find_{name}({name}_ty node, int tag, int *flag)", 0)
+        self.emit("int _i = 0;", 1);
+        self.emit("void *result = NULL;", 1);
+        yield 1
+        self.emit("{", 0)
+        self.emit("}", 0)
+
+
 class PartingShots(StaticVisitor):
 
     CODE = """
@@ -1487,6 +1514,42 @@ def generate_module_def(mod, f, internal_h):
     f.write('    return 1;\n')
     f.write('};\n\n')
 
+
+def generate_finder_def(mod, f):
+    f.write(textwrap.dedent("""\
+    #define TRAVERSE(TYPE, NODE) { \\
+        if ((NODE)) { \\
+            result = traverse ## TYPE((NODE), tag, flag); \\
+            if (*flag) { \\
+                return NULL; \\
+            } else if (result) { \\
+                return result; \\
+            } \\
+        } \\
+    }
+
+    #define TRAVERSE_SEQ(TYPE, SEQ) { \\
+        for (_i = 0; _i < asdl_seq_LEN((SEQ)); _i++) { \\
+            TYPE ## _ty elt = (TYPE ## _ty)asdl_seq_GET((SEQ), _i); \\
+            TRAVERSE((TYPE), elt); \\
+        } \\
+    }
+    """))
+
+
+def generate_finder_func(mod, f):
+    f.write(textwrap.dedent("""\
+    void *
+    find_node(mod_ty tree, int tag)
+    {
+        int error_flag = 0;
+        void *result = find_mod(tree, tag, *error_flag);
+        assert(result == NULL || !error_flag);
+        return result;
+    }
+    """))
+
+
 def write_header(mod, f):
     f.write(textwrap.dedent("""
         #ifndef Py_INTERNAL_AST_H
@@ -1573,7 +1636,12 @@ def write_source(mod, f, internal_h_file):
     v.visit(mod)
 
 def write_finder(mod, f):
-    ...
+    generate_finder_def(mod, f)
+
+    v = FinderVisitor(f)
+    v.visit(mod)
+
+    generate_finder_func(mod, f)
 
 
 def main(
