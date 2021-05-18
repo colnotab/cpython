@@ -526,6 +526,7 @@ w_complex_object(PyObject *v, char flag, WFILE *p)
         w_long(co->co_firstlineno, p);
         w_object(co->co_linetable, p);
         w_object(co->co_exceptiontable, p);
+        w_object(co->co_nodeids, p);
     }
     else if (PyObject_CheckBuffer(v)) {
         /* Write unknown bytes-like objects as a bytes object */
@@ -1315,6 +1316,7 @@ r_object(RFILE *p)
             int firstlineno;
             PyObject *linetable = NULL;
             PyObject *exceptiontable = NULL;
+            PyObject *nodeids = NULL;
 
             idx = r_ref_reserve(flag, p);
             if (idx < 0)
@@ -1375,7 +1377,9 @@ r_object(RFILE *p)
             exceptiontable = r_object(p);
             if (exceptiontable == NULL)
                 goto code_error;
-
+            nodeids = r_object(p);
+            if (nodeids == NULL)
+                goto code_error;
 
             if (PySys_Audit("code.__new__", "OOOiiiiii",
                             code, filename, name, argcount, posonlyargcount,
@@ -1388,7 +1392,8 @@ r_object(RFILE *p)
                             nlocals, stacksize, flags,
                             code, consts, names, varnames,
                             freevars, cellvars, filename, name,
-                            firstlineno, linetable, exceptiontable);
+                            firstlineno, linetable, exceptiontable,
+                            nodeids);
             v = r_ref_insert(v, idx, flag, p);
 
           code_error:

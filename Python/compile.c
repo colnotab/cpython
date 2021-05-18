@@ -6523,9 +6523,7 @@ struct assembler {
     int a_prevlineno;     /* lineno of last emitted line in line table */
     int a_lineno;          /* lineno of last emitted instruction */
     int a_lineno_start;    /* bytecode start offset of current lineno */
-    int *a_node_ids;
-    int a_node_ids_off;
-    int a_node_ids_size;
+    PyObject* a_node_ids;
     basicblock *a_entry;
 };
 
@@ -6641,18 +6639,16 @@ assemble_init(struct assembler *a, int nblocks, int firstlineno)
         PyErr_NoMemory();
         goto error;
     }
-    a->a_node_ids = PyMem_Malloc(sizeof(int) * DEFAULT_NODEID_SIZE);
+    a->a_node_ids = PyList_New(0);
     if (a->a_node_ids == NULL) {
-        PyErr_NoMemory();
         goto error;
     }
-    a->a_node_ids_size = DEFAULT_NODEID_SIZE;
-    a->a_node_ids_off = 0;
     return 1;
 error:
     Py_XDECREF(a->a_bytecode);
     Py_XDECREF(a->a_lnotab);
     Py_XDECREF(a->a_except_table);
+    Py_XDECREF(a->a_node_ids);
     return 0;
 }
 
@@ -6662,6 +6658,7 @@ assemble_free(struct assembler *a)
     Py_XDECREF(a->a_bytecode);
     Py_XDECREF(a->a_lnotab);
     Py_XDECREF(a->a_except_table);
+    Py_XDECREF(a->a_node_ids);
 }
 
 static int
@@ -6999,17 +6996,13 @@ assemble_lnotab(struct assembler *a, struct instr *i)
 static int
 assemble_nodeid(struct assembler *a, struct instr *i)
 {
-    if (a->a_node_ids_off >= a->a_node_ids_size) {
-        int* new_node_ids = PyMem_Realloc(a->a_node_ids, a->a_node_ids_size * 2);
-        if (a->a_node_ids == NULL) {
-            // Todo: Fix the lifetime of the array!
-            PyMem_Free(a->a_node_ids);
-            return 0;
-        }
-        a->a_node_ids = new_node_ids;
-        a->a_node_ids_size = a->a_node_ids_size * 2;
+    PyObject* node_id = Py_BuildValue("(ii)", a->a_offset, i->i_node_id);
+    if (node_id == NULL) {
+        return 0;
     }
-    a->a_node_ids[a->a_node_ids_off++] = i->i_node_id;
+    if(PyList_Append(a->a_node_ids, node_id) == -1) {
+        return 0;
+    }
     return 1;
 }
 
@@ -7020,8 +7013,7 @@ assemble_nodeid(struct assembler *a, struct instr *i)
 
 static int
 assemble_emit(struct assembler *a, struct instr *i)
-{
-    int size, arg = 0;
+{ int size, arg = 0;
     Py_ssize_t len = PyBytes_GET_SIZE(a->a_bytecode);
     _Py_CODEUNIT *code;
 
@@ -7029,7 +7021,6 @@ assemble_emit(struct assembler *a, struct instr *i)
     size = instrsize(arg);
     if (i->i_lineno && !assemble_lnotab(a, i))
         return 0;
-    printf("Node_id: %d\n", i->i_node_id);
     if (i->i_node_id && !assemble_nodeid(a, i))
         return 0;
     if (a->a_offset + size >= len / (int)sizeof(_Py_CODEUNIT)) {
@@ -7217,6 +7208,7 @@ makecode(struct compiler *c, struct assembler *a, PyObject *consts, int maxdepth
     PyObject *name = NULL;
     PyObject *freevars = NULL;
     PyObject *cellvars = NULL;
+    PyObject *node_ids = NULL;
     Py_ssize_t nlocals;
     int nlocals_int;
     int flags;
@@ -7250,6 +7242,11 @@ makecode(struct compiler *c, struct assembler *a, PyObject *consts, int maxdepth
     if (flags < 0)
         goto error;
 
+    node_ids = PySequence_Tuple(a->a_node_ids);
+    if (node_ids == NULL) {
+        goto error;
+    }
+
     consts = PyList_AsTuple(consts); /* PyCode_New requires a tuple */
     if (consts == NULL) {
         goto error;
@@ -7262,11 +7259,13 @@ makecode(struct compiler *c, struct assembler *a, PyObject *consts, int maxdepth
     posonlyargcount = Py_SAFE_DOWNCAST(c->u->u_posonlyargcount, Py_ssize_t, int);
     posorkeywordargcount = Py_SAFE_DOWNCAST(c->u->u_argcount, Py_ssize_t, int);
     kwonlyargcount = Py_SAFE_DOWNCAST(c->u->u_kwonlyargcount, Py_ssize_t, int);
-    co = PyCode_NewWithPosOnlyArgs(posonlyargcount+posorkeywordargcount,
+
+   co = PyCode_NewWithPosOnlyArgs(posonlyargcount+posorkeywordargcount,
                                    posonlyargcount, kwonlyargcount, nlocals_int,
                                    maxdepth, flags, a->a_bytecode, consts, names,
                                    varnames, freevars, cellvars, c->c_filename,
-                                   c->u->u_name, c->u->u_firstlineno, a->a_lnotab, a->a_except_table);
+                                   c->u->u_name, c->u->u_firstlineno, a->a_lnotab,
+                                   a->a_except_table, node_ids);
     Py_DECREF(consts);
  error:
     Py_XDECREF(names);
@@ -7274,6 +7273,7 @@ makecode(struct compiler *c, struct assembler *a, PyObject *consts, int maxdepth
     Py_XDECREF(name);
     Py_XDECREF(freevars);
     Py_XDECREF(cellvars);
+    Py_XDECREF(node_ids);
     return co;
 }
 
@@ -7476,13 +7476,6 @@ assemble(struct compiler *c, int addNone)
             if (!assemble_emit(&a, &b->b_instr[j]))
                 goto error;
     }
-
-    // TODO: Remove
-    printf("Table: ");
-    for(int x = 0; x < a.a_node_ids_off; x++) {
-        printf("%d,", a.a_node_ids[x]);
-    }
-    printf("\n");
 
     if (!assemble_exception_table(&a)) {
         return 0;
