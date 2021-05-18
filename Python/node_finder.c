@@ -4,7 +4,7 @@
 #include "pycore_ast.h"
 #define TRAVERSE(TYPE, NODE) { \
     if ((NODE)) { \
-        result = find_ ## TYPE((NODE), tag); \
+        result = find_ ## TYPE((NODE), tag, lineno, end_lineno, col_offset, end_col_offset); \
         if (result) { \
             return result; \
         } \
@@ -18,27 +18,28 @@
         TRAVERSE(TYPE, elt); \
     } \
 }
-void * find_mod(mod_ty, int);
-void * find_stmt(stmt_ty, int);
-void * find_expr(expr_ty, int);
-void * find_expr_context(expr_context_ty, int);
-void * find_boolop(boolop_ty, int);
-void * find_operator(operator_ty, int);
-void * find_unaryop(unaryop_ty, int);
-void * find_cmpop(cmpop_ty, int);
-void * find_comprehension(comprehension_ty, int);
-void * find_excepthandler(excepthandler_ty, int);
-void * find_arguments(arguments_ty, int);
-void * find_arg(arg_ty, int);
-void * find_keyword(keyword_ty, int);
-void * find_alias(alias_ty, int);
-void * find_withitem(withitem_ty, int);
-void * find_match_case(match_case_ty, int);
-void * find_pattern(pattern_ty, int);
-void * find_type_ignore(type_ignore_ty, int);
+void * find_mod(mod_ty, int, int *, int *, int *, int *);
+void * find_stmt(stmt_ty, int, int *, int *, int *, int *);
+void * find_expr(expr_ty, int, int *, int *, int *, int *);
+void * find_expr_context(expr_context_ty, int, int *, int *, int *, int *);
+void * find_boolop(boolop_ty, int, int *, int *, int *, int *);
+void * find_operator(operator_ty, int, int *, int *, int *, int *);
+void * find_unaryop(unaryop_ty, int, int *, int *, int *, int *);
+void * find_cmpop(cmpop_ty, int, int *, int *, int *, int *);
+void * find_comprehension(comprehension_ty, int, int *, int *, int *, int *);
+void * find_excepthandler(excepthandler_ty, int, int *, int *, int *, int *);
+void * find_arguments(arguments_ty, int, int *, int *, int *, int *);
+void * find_arg(arg_ty, int, int *, int *, int *, int *);
+void * find_keyword(keyword_ty, int, int *, int *, int *, int *);
+void * find_alias(alias_ty, int, int *, int *, int *, int *);
+void * find_withitem(withitem_ty, int, int *, int *, int *, int *);
+void * find_match_case(match_case_ty, int, int *, int *, int *, int *);
+void * find_pattern(pattern_ty, int, int *, int *, int *, int *);
+void * find_type_ignore(type_ignore_ty, int, int *, int *, int *, int *);
 
 void *
-find_mod(mod_ty node, int tag)
+find_mod(mod_ty node, int tag, int *lineno, int *end_lineno, int *col_offset,
+         int *end_col_offset)
 {
     void *result = NULL;
     switch (node->kind) {
@@ -64,10 +65,15 @@ find_mod(mod_ty node, int tag)
     return result;
 }
 void *
-find_stmt(stmt_ty node, int tag)
+find_stmt(stmt_ty node, int tag, int *lineno, int *end_lineno, int *col_offset,
+          int *end_col_offset)
 {
     void *result = NULL;
     if (node->node_id == tag) {
+        *lineno = node->lineno;
+        *end_lineno = node->end_lineno;
+        *col_offset = node->col_offset;
+        *end_col_offset = node->end_col_offset;
         return node;
     }
     switch (node->kind) {
@@ -206,10 +212,15 @@ find_stmt(stmt_ty node, int tag)
     return result;
 }
 void *
-find_expr(expr_ty node, int tag)
+find_expr(expr_ty node, int tag, int *lineno, int *end_lineno, int *col_offset,
+          int *end_col_offset)
 {
     void *result = NULL;
     if (node->node_id == tag) {
+        *lineno = node->lineno;
+        *end_lineno = node->end_lineno;
+        *col_offset = node->col_offset;
+        *end_col_offset = node->end_col_offset;
         return node;
     }
     switch (node->kind) {
@@ -351,37 +362,43 @@ find_expr(expr_ty node, int tag)
     return result;
 }
 void *
-find_expr_context(expr_context_ty node, int tag)
+find_expr_context(expr_context_ty node, int tag, int *lineno, int *end_lineno,
+                  int *col_offset, int *end_col_offset)
 {
     void *result = NULL;
     return result;
 }
 void *
-find_boolop(boolop_ty node, int tag)
+find_boolop(boolop_ty node, int tag, int *lineno, int *end_lineno, int
+            *col_offset, int *end_col_offset)
 {
     void *result = NULL;
     return result;
 }
 void *
-find_operator(operator_ty node, int tag)
+find_operator(operator_ty node, int tag, int *lineno, int *end_lineno, int
+              *col_offset, int *end_col_offset)
 {
     void *result = NULL;
     return result;
 }
 void *
-find_unaryop(unaryop_ty node, int tag)
+find_unaryop(unaryop_ty node, int tag, int *lineno, int *end_lineno, int
+             *col_offset, int *end_col_offset)
 {
     void *result = NULL;
     return result;
 }
 void *
-find_cmpop(cmpop_ty node, int tag)
+find_cmpop(cmpop_ty node, int tag, int *lineno, int *end_lineno, int
+           *col_offset, int *end_col_offset)
 {
     void *result = NULL;
     return result;
 }
 void *
-find_comprehension(comprehension_ty node, int tag)
+find_comprehension(comprehension_ty node, int tag, int *lineno, int
+                   *end_lineno, int *col_offset, int *end_col_offset)
 {
     void *result = NULL;
     TRAVERSE(expr, node->target);
@@ -390,10 +407,15 @@ find_comprehension(comprehension_ty node, int tag)
     return result;
 }
 void *
-find_excepthandler(excepthandler_ty node, int tag)
+find_excepthandler(excepthandler_ty node, int tag, int *lineno, int
+                   *end_lineno, int *col_offset, int *end_col_offset)
 {
     void *result = NULL;
     if (node->node_id == tag) {
+        *lineno = node->lineno;
+        *end_lineno = node->end_lineno;
+        *col_offset = node->col_offset;
+        *end_col_offset = node->end_col_offset;
         return node;
     }
     switch (node->kind) {
@@ -406,7 +428,8 @@ find_excepthandler(excepthandler_ty node, int tag)
     return result;
 }
 void *
-find_arguments(arguments_ty node, int tag)
+find_arguments(arguments_ty node, int tag, int *lineno, int *end_lineno, int
+               *col_offset, int *end_col_offset)
 {
     void *result = NULL;
     TRAVERSE_SEQ(arg, node->posonlyargs);
@@ -419,36 +442,52 @@ find_arguments(arguments_ty node, int tag)
     return result;
 }
 void *
-find_arg(arg_ty node, int tag)
+find_arg(arg_ty node, int tag, int *lineno, int *end_lineno, int *col_offset,
+         int *end_col_offset)
 {
     void *result = NULL;
     if (node->node_id == tag) {
+        *lineno = node->lineno;
+        *end_lineno = node->end_lineno;
+        *col_offset = node->col_offset;
+        *end_col_offset = node->end_col_offset;
         return node;
     }
     TRAVERSE(expr, node->annotation);
     return result;
 }
 void *
-find_keyword(keyword_ty node, int tag)
+find_keyword(keyword_ty node, int tag, int *lineno, int *end_lineno, int
+             *col_offset, int *end_col_offset)
 {
     void *result = NULL;
     if (node->node_id == tag) {
+        *lineno = node->lineno;
+        *end_lineno = node->end_lineno;
+        *col_offset = node->col_offset;
+        *end_col_offset = node->end_col_offset;
         return node;
     }
     TRAVERSE(expr, node->value);
     return result;
 }
 void *
-find_alias(alias_ty node, int tag)
+find_alias(alias_ty node, int tag, int *lineno, int *end_lineno, int
+           *col_offset, int *end_col_offset)
 {
     void *result = NULL;
     if (node->node_id == tag) {
+        *lineno = node->lineno;
+        *end_lineno = node->end_lineno;
+        *col_offset = node->col_offset;
+        *end_col_offset = node->end_col_offset;
         return node;
     }
     return result;
 }
 void *
-find_withitem(withitem_ty node, int tag)
+find_withitem(withitem_ty node, int tag, int *lineno, int *end_lineno, int
+              *col_offset, int *end_col_offset)
 {
     void *result = NULL;
     TRAVERSE(expr, node->context_expr);
@@ -456,7 +495,8 @@ find_withitem(withitem_ty node, int tag)
     return result;
 }
 void *
-find_match_case(match_case_ty node, int tag)
+find_match_case(match_case_ty node, int tag, int *lineno, int *end_lineno, int
+                *col_offset, int *end_col_offset)
 {
     void *result = NULL;
     TRAVERSE(pattern, node->pattern);
@@ -465,10 +505,15 @@ find_match_case(match_case_ty node, int tag)
     return result;
 }
 void *
-find_pattern(pattern_ty node, int tag)
+find_pattern(pattern_ty node, int tag, int *lineno, int *end_lineno, int
+             *col_offset, int *end_col_offset)
 {
     void *result = NULL;
     if (node->node_id == tag) {
+        *lineno = node->lineno;
+        *end_lineno = node->end_lineno;
+        *col_offset = node->col_offset;
+        *end_col_offset = node->end_col_offset;
         return node;
     }
     switch (node->kind) {
@@ -509,7 +554,8 @@ find_pattern(pattern_ty node, int tag)
     return result;
 }
 void *
-find_type_ignore(type_ignore_ty node, int tag)
+find_type_ignore(type_ignore_ty node, int tag, int *lineno, int *end_lineno,
+                 int *col_offset, int *end_col_offset)
 {
     void *result = NULL;
     switch (node->kind) {
@@ -521,7 +567,10 @@ find_type_ignore(type_ignore_ty node, int tag)
 }
 
 void *
-find_node(mod_ty tree, int tag)
+_PyAST_FindTaggedNode(mod_ty tree, int tag, int *lineno,
+                      int *end_lineno, int *col_offset,
+                      int *end_col_offset)
 {
-    return find_mod(tree, tag);
+    return find_mod(tree, tag, lineno, end_lineno,
+                    col_offset, end_col_offset);
 }

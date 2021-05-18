@@ -1327,10 +1327,12 @@ class FinderHeaderVisitor(PickleVisitor):
         self.emit_header(name)
 
     def emit_header(self, name):
-        self.emit(f"void * find_{name}({name}_ty, int);", 0)
+        self.emit(f"void * find_{name}({name}_ty, int, int *, int *, int *, int *);", 0)
 
 class FinderBodyVisitor(PickleVisitor):
     from contextlib import contextmanager
+
+    _POSITIONS = ("lineno", "end_lineno", "col_offset", "end_col_offset")
 
     def visitSum(self, node, name):
         # simple sums don't have tags and
@@ -1354,11 +1356,14 @@ class FinderBodyVisitor(PickleVisitor):
     @contextmanager
     def emit_finder(self, node, name):
         self.emit("void *", 0)
-        self.emit(f"find_{name}({name}_ty node, int tag)", 0)
+        positions = ", ".join(f"int *{pos}" for pos in self._POSITIONS)
+        self.emit(f"find_{name}({name}_ty node, int tag, {positions})", 0)
         self.emit("{", 0)
         self.emit("void *result = NULL;", 1);
         if any(field.name == NODE_TAG for field in node.attributes):
             self.emit(f"if (node->{NODE_TAG} == tag) {{", 1);
+            for position in self._POSITIONS:
+                self.emit(f"*{position} = node->{position};", 2)
             self.emit("return node;", 2);
             self.emit("}", 1);
         yield 1
@@ -1556,7 +1561,7 @@ def generate_finder_def(mod, f):
     #include "pycore_ast.h"
     #define TRAVERSE(TYPE, NODE) { \\
         if ((NODE)) { \\
-            result = find_ ## TYPE((NODE), tag); \\
+            result = find_ ## TYPE((NODE), tag, lineno, end_lineno, col_offset, end_col_offset); \\
             if (result) { \\
                 return result; \\
             } \\
@@ -1576,9 +1581,12 @@ def generate_finder_def(mod, f):
 def generate_finder_func(mod, f):
     f.write(textwrap.dedent("""\
     void *
-    find_node(mod_ty tree, int tag)
+    _PyAST_FindTaggedNode(mod_ty tree, int tag, int *lineno,
+                          int *end_lineno, int *col_offset,
+                          int *end_col_offset)
     {
-        return find_mod(tree, tag);
+        return find_mod(tree, tag, lineno, end_lineno,
+                        col_offset, end_col_offset);
     }
     """))
 
@@ -1612,6 +1620,7 @@ def write_header(mod, f):
         int PyAST_Check(PyObject* obj);
 
         extern int _PyAST_Validate(mod_ty);
+        extern void* _PyAST_FindTaggedNode(mod_ty, int tag, int *, int *, int *, int *);
 
         /* _PyAST_ExprAsUnicode is defined in ast_unparse.c */
         extern PyObject* _PyAST_ExprAsUnicode(expr_ty);

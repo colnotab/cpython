@@ -879,6 +879,7 @@ mod_ty PyAST_obj2mod(PyObject* ast, PyArena* arena, int mode);
 int PyAST_Check(PyObject* obj);
 
 extern int _PyAST_Validate(mod_ty);
+extern void* _PyAST_FindTaggedNode(mod_ty, int tag, int *, int *, int *, int *);
 
 /* _PyAST_ExprAsUnicode is defined in ast_unparse.c */
 extern PyObject* _PyAST_ExprAsUnicode(expr_ty);

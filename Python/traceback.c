@@ -500,8 +500,53 @@ _Py_DisplaySourceLine(PyObject *f, PyObject *filename, int lineno, int indent)
     return err;
 }
 
+#include "compile.h"
+#include "pycore_ast.h"
+#include "pycore_parser.h"
+#include "pycore_fileutils.h" 
+
 static int
-tb_displayline(PyObject *f, PyObject *filename, int lineno, PyObject *name)
+_Py_AnnotateError(PyObject *f, PyObject *filename, PyTracebackObject *tb)
+{
+    // borrowed
+    PyObject *node_id = PyTuple_GetItem(tb->tb_frame->f_code->co_nodeids, tb->tb_lasti / 2);
+    if (!node_id) {
+        return -1;
+    }
+
+    int tag = PyLong_AsLong(node_id);
+    if (tag == -1 && PyErr_Occurred()) {
+        return -1;
+    }
+
+    FILE *fp = _Py_fopen_obj(filename, "r");
+    if (!fp) {
+        return -1;
+    }
+
+    PyArena *arena = _PyArena_New();
+    if (arena == NULL) {
+        fclose(fp);
+        return -1;
+    }
+    mod_ty tree = _PyParser_ASTFromFile(fp, filename, NULL, Py_file_input, NULL,
+                                        NULL, NULL, NULL, arena);
+    fclose(fp);
+    
+    int start_line, end_line, start_col, end_col;
+    void *node = _PyAST_FindTaggedNode(tree, tag, &start_line, &end_line, &start_col, &end_col);
+    if (!node) {
+        // can't locate the node
+        return 0;
+    }
+    
+    printf("x: %d, y: %d\n", start_col, end_col);
+    return 0;
+}
+
+static int
+tb_displayline(PyObject *f, PyObject *filename, int lineno, PyObject *name,
+               PyTracebackObject *tb)
 {
     int err;
     PyObject *line;
@@ -517,8 +562,10 @@ tb_displayline(PyObject *f, PyObject *filename, int lineno, PyObject *name)
     if (err != 0)
         return err;
     /* ignore errors since we can't report them, can we? */
-    if (_Py_DisplaySourceLine(f, filename, lineno, 4))
+    if (_Py_DisplaySourceLine(f, filename, lineno, 4) ||
+        _Py_AnnotateError(f, filename, tb)) {
         PyErr_Clear();
+    }
     return err;
 }
 
@@ -576,7 +623,7 @@ tb_printinternal(PyTracebackObject *tb, PyObject *f, long limit)
         cnt++;
         if (err == 0 && cnt <= TB_RECURSIVE_CUTOFF) {
             err = tb_displayline(f, code->co_filename, tb->tb_lineno,
-                                 code->co_name);
+                                 code->co_name, tb);
             if (err == 0) {
                 err = PyErr_CheckSignals();
             }
