@@ -1541,7 +1541,14 @@ def write_source(mod, f, internal_h_file):
     )
     v.visit(mod)
 
-def main(input_filename, c_filename, h_filename, internal_h_filename, dump_module=False):
+def write_finder(mod, f):
+    ...
+
+def main(
+    input_filename, c_filename,
+    h_filename, finder_filename,
+    internal_h_filename, dump_module=False
+):
     auto_gen_msg = AUTOGEN_MESSAGE.format("/".join(Path(__file__).parts[-2:]))
     mod = asdl.parse(input_filename)
     if dump_module:
@@ -1552,14 +1559,17 @@ def main(input_filename, c_filename, h_filename, internal_h_filename, dump_modul
 
     with c_filename.open("w") as c_file, \
          h_filename.open("w") as h_file, \
+         finder_filename.open("w") as finder_file, \
          internal_h_filename.open("w") as internal_h_file:
         c_file.write(auto_gen_msg)
         h_file.write(auto_gen_msg)
+        finder_file.write(auto_gen_msg)
         internal_h_file.write(auto_gen_msg)
 
         write_internal_h_header(mod, internal_h_file)
         write_source(mod, c_file, internal_h_file)
         write_header(mod, h_file)
+        write_finder(mod, finder_file)
         write_internal_h_footer(mod, internal_h_file)
 
     print(f"{c_filename}, {h_filename}, {internal_h_filename} regenerated.")
@@ -1569,9 +1579,10 @@ if __name__ == "__main__":
     parser.add_argument("input_file", type=Path)
     parser.add_argument("-C", "--c-file", type=Path, required=True)
     parser.add_argument("-H", "--h-file", type=Path, required=True)
+    parser.add_argument("-F", "--finder-file", type=Path, required=True)
     parser.add_argument("-I", "--internal-h-file", type=Path, required=True)
     parser.add_argument("-d", "--dump-module", action="store_true")
 
     args = parser.parse_args()
     main(args.input_file, args.c_file, args.h_file,
-         args.internal_h_file, args.dump_module)
+         args.finder_file, args.internal_h_file, args.dump_module)
