@@ -140,7 +140,6 @@ PyCode_NewWithPosOnlyArgs(int argcount, int posonlyargcount, int kwonlyargcount,
         linetable == NULL || !PyBytes_Check(linetable) ||
         exceptiontable == NULL || !PyBytes_Check(exceptiontable) ||
         node_ids == NULL || !PyTuple_Check(node_ids)) {
-        __asm__("int3");
         PyErr_BadInternalCall();
         return NULL;
     }
