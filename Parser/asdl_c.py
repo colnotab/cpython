@@ -263,6 +263,25 @@ class StructVisitor(EmitVisitor):
         self.emit("};", depth)
         self.emit("", depth)
 
+class TaggedKindVisitor(EmitVisitor):
+
+    _TAG = 'node_id'
+
+    def visitModule(self, mod):
+        tagged_structs = []
+        for dfn in mod.dfns:
+            if any(field.name == self._TAG for field in dfn.value.attributes):
+                tagged_structs.append(dfn)
+
+        self.emit_tagged_kind(tagged_structs)
+
+    def emit_tagged_kind(self, dfns):
+        enum = ", ".join(
+            f"{dfn.name}_kind={idx}"
+            for idx, dfn in enumerate(dfns)
+        )
+        self.emit(f"enum _tagged_kind {{{enum}}};", 0)
+
 
 def ast_func_name(name):
     return f"_PyAST_{name}"
@@ -1474,7 +1493,8 @@ def write_header(mod, f):
     """).lstrip())
     c = ChainOfVisitors(TypeDefVisitor(f),
                         SequenceDefVisitor(f),
-                        StructVisitor(f))
+                        StructVisitor(f),
+                        TaggedKindVisitor(f))
     c.visit(mod)
     f.write("// Note: these macros affect function definitions, not only call sites.\n")
     PrototypeVisitor(f).visit(mod)
@@ -1543,6 +1563,7 @@ def write_source(mod, f, internal_h_file):
 
 def write_finder(mod, f):
     ...
+
 
 def main(
     input_filename, c_filename,

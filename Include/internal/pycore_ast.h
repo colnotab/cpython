@@ -631,6 +631,9 @@ struct _type_ignore {
 };
 
 
+enum _tagged_kind {stmt_kind=0, expr_kind=1, excepthandler_kind=2, arg_kind=3,
+                   keyword_kind=4, alias_kind=5, pattern_kind=6};
+
 // Note: these macros affect function definitions, not only call sites.
 mod_ty _PyAST_Module(asdl_stmt_seq * body, asdl_type_ignore_seq * type_ignores,
                      PyArena *arena);
