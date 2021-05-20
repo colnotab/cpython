@@ -369,7 +369,7 @@ finally:
 }
 
 int
-_Py_DisplaySourceLine(PyObject *f, PyObject *filename, int lineno, int indent, int *truncation)
+_Py_DisplaySourceLine(PyObject *f, PyObject *filename, int lineno, int indent, int *truncation, PyObject **line)
 {
     int err = 0;
     int fd;
@@ -460,6 +460,11 @@ _Py_DisplaySourceLine(PyObject *f, PyObject *filename, int lineno, int indent, i
         return err;
     }
 
+    if (line) {
+        Py_INCREF(lineobj);
+        *line = lineobj;
+    }
+
     /* remove the indentation of the line */
     kind = PyUnicode_KIND(lineobj);
     data = PyUnicode_DATA(lineobj);
@@ -504,6 +509,29 @@ _Py_DisplaySourceLine(PyObject *f, PyObject *filename, int lineno, int indent, i
     return err;
 }
 
+static int byte_to_character_offset_in_line(PyObject* line, int offset) {
+    // Taken pretty much exactly from pegen.c for now.
+    if (offset <= 0) {
+        return offset;
+    }
+    const char *str = PyUnicode_AsUTF8(line);
+    if (!str) {
+        return 0;
+    }
+    Py_ssize_t len = strlen(str);
+    if (offset > len) {
+        offset = len;
+    }
+
+    PyObject *text = PyUnicode_DecodeUTF8(str, offset, "replace");
+    if (!text) {
+        return 0;
+    }
+    Py_ssize_t size = PyUnicode_GET_LENGTH(text);
+    Py_DECREF(text);
+    return size;
+}
+
 #define _TRACEBACK_SOURCE_LINE_INDENT 4
 
 // TODO: Pick up filename and other stuff from the tb argument
@@ -525,8 +553,9 @@ tb_displayline(PyTracebackObject* tb, PyObject *f, PyObject *filename, int linen
     if (err != 0)
         return err;
     int truncation = _TRACEBACK_SOURCE_LINE_INDENT;
+    PyObject* source_line = NULL;
     /* ignore errors since we can't report them, can we? */
-    if (!_Py_DisplaySourceLine(f, filename, lineno, _TRACEBACK_SOURCE_LINE_INDENT, &truncation)) {
+    if (!_Py_DisplaySourceLine(f, filename, lineno, _TRACEBACK_SOURCE_LINE_INDENT, &truncation, &source_line)) {
         int code_offset = tb->tb_lasti;
         if (PyCode_Addr2Line(frame->f_code, code_offset) != PyCode_Addr2EndLine(frame->f_code, code_offset)) {
             goto done;
@@ -534,6 +563,11 @@ tb_displayline(PyTracebackObject* tb, PyObject *f, PyObject *filename, int linen
 
         int start_offset = PyCode_Addr2Offset(frame->f_code, code_offset);
         int end_offset = PyCode_Addr2EndOffset(frame->f_code, code_offset);
+
+        start_offset = byte_to_character_offset_in_line(source_line, start_offset);
+        // Not sure why a `+ 1` is needed here for the end_offset.
+        end_offset = byte_to_character_offset_in_line(source_line, end_offset) + 1;
+
         if (start_offset <= 0 || end_offset < 0) {
             goto done;
         }
@@ -563,6 +597,9 @@ tb_displayline(PyTracebackObject* tb, PyObject *f, PyObject *filename, int linen
     }
     
 done:
+    if (source_line) {
+        Py_DECREF(source_line);
+    }
     return err;
 }
 

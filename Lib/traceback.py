@@ -342,7 +342,13 @@ def _walk_tb_with_full_positions(tb):
     # Internal version of walk_tb that yields full code positions including
     # end line and column information.
     while tb is not None:
-        yield tb.tb_frame, _get_code_position(tb.tb_frame.f_code, tb.tb_lasti)
+        # TODO: In some situations `tb_lasti` is not set properly in the
+        # traceback, this works around the problem currently but we should
+        # look more closely at it.
+        if tb.tb_lasti < 0:
+            yield tb.tb_frame, (tb.tb_lineno, None, None, None)
+        else:
+            yield tb.tb_frame, _get_code_position(tb.tb_frame.f_code, tb.tb_lasti)
         tb = tb.tb_next
 
 
@@ -481,9 +487,12 @@ class StackSummary(list):
 
                 stripped_characters = len(frame._original_line) - len(frame.line.lstrip())
                 if frame.end_lineno == frame.lineno and frame.end_colno != 0:
+                    colno = _byte_offset_to_character_offset(frame._original_line, frame.colno)
+                    end_colno = _byte_offset_to_character_offset(frame._original_line, frame.end_colno)
+
                     row.append('    ')
-                    row.append(' ' * (frame.colno - stripped_characters))
-                    row.append('^' * (frame.end_colno - frame.colno))
+                    row.append(' ' * (colno - stripped_characters))
+                    row.append('^' * (end_colno - colno))
                     row.append('\n')
 
             if frame.locals:
@@ -497,6 +506,14 @@ class StackSummary(list):
                 f'time{"s" if count > 1 else ""}]\n'
             )
         return result
+
+
+def _byte_offset_to_character_offset(str, offset):
+    as_utf8 = str.encode('utf-8')
+    if offset > len(as_utf8):
+        offset = len(as_utf8)
+
+    return len(as_utf8[:offset].decode("utf-8"))
 
 
 class TracebackException:
