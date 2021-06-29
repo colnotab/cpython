@@ -4,6 +4,7 @@
 #include "Python.h"
 
 #include "code.h"
+#include "pycore_interp.h"        // PyInterpreterState.gc
 #include "frameobject.h"          // PyFrame_GetBack()
 #include "structmember.h"         // PyMemberDef
 #include "osdefs.h"               // SEP
@@ -541,6 +542,7 @@ tb_displayline(PyTracebackObject* tb, PyObject *f, PyObject *filename, int linen
 {
     int err;
     PyObject *line;
+    PyCodeObject *code = NULL;
 
     if (filename == NULL || name == NULL)
         return -1;
@@ -557,12 +559,13 @@ tb_displayline(PyTracebackObject* tb, PyObject *f, PyObject *filename, int linen
     /* ignore errors since we can't report them, can we? */
     if (!_Py_DisplaySourceLine(f, filename, lineno, _TRACEBACK_SOURCE_LINE_INDENT, &truncation, &source_line)) {
         int code_offset = tb->tb_lasti;
-        if (PyCode_Addr2Line(frame->f_code, code_offset) != PyCode_Addr2EndLine(frame->f_code, code_offset)) {
+        code = PyFrame_GetCode(frame);
+        if (PyCode_Addr2Line(code, code_offset) != PyCode_Addr2EndLine(code, code_offset)) {
             goto done;
         }
 
-        int start_offset = PyCode_Addr2Offset(frame->f_code, code_offset);
-        int end_offset = PyCode_Addr2EndOffset(frame->f_code, code_offset);
+        int start_offset = PyCode_Addr2Offset(code, code_offset);
+        int end_offset = PyCode_Addr2EndOffset(code, code_offset);
 
         start_offset = byte_to_character_offset_in_line(source_line, start_offset);
         // Not sure why a `+ 1` is needed here for the end_offset.
@@ -597,6 +600,7 @@ tb_displayline(PyTracebackObject* tb, PyObject *f, PyObject *filename, int linen
     }
     
 done:
+    Py_XDECREF(code);
     Py_XDECREF(source_line);
     return err;
 }
@@ -993,6 +997,9 @@ _Py_DumpTracebackThreads(int fd, PyInterpreterState *interp,
             break;
         }
         write_thread_id(fd, tstate, tstate == current_tstate);
+        if (tstate == current_tstate && tstate->interp->gc.collecting) {
+            PUTS(fd, "  Garbage-collecting\n");
+        }
         dump_traceback(fd, tstate, 0);
         tstate = PyThreadState_Next(tstate);
         nthreads++;
