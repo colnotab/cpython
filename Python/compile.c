@@ -7005,26 +7005,28 @@ assemble_enotab(struct assembler *a, struct instr *i)
 }
 
 static int
-assemble_cnotab(struct assembler *a, struct instr *i)
+assemble_cnotab(struct assembler *a, struct instr *i, int instr_size)
 {
     Py_ssize_t len = PyBytes_GET_SIZE(a->a_cnotab);
     // TODO: allocate more and re-use it if possible
-    if (_PyBytes_Resize(&a->a_cnotab, len + 2) < 0) {
+    if (_PyBytes_Resize(&a->a_cnotab, len + (instr_size * 2)) < 0) {
         return 0;
     }
 
     unsigned char *cnotab = (unsigned char *)PyBytes_AS_STRING(a->a_cnotab);
     cnotab += len;
 
-    if (i->i_col_offset > 255 || i->i_col_offset > 255) {
-        *cnotab++ = 0;
-        *cnotab++ = 0;
-        return 1;
-    } else {
-        *cnotab++ = i->i_col_offset + 1;
-    }
+    for (int j = 0; j < instr_size; j++) {
+        if (i->i_col_offset > 255 || i->i_end_col_offset > 255) {
+            *cnotab++ = 0;
+            *cnotab++ = 0;
+            return 1;
+        } else {
+            *cnotab++ = i->i_col_offset + 1;
+        }
 
-    *cnotab++ = i->i_end_col_offset + 1;
+        *cnotab++ = i->i_end_col_offset + 1;
+    }
     return 1;
 }
 
@@ -7048,7 +7050,7 @@ assemble_emit(struct assembler *a, struct instr *i)
     if (!assemble_enotab(a, i)) {
         return 0;
     }
-    if (!assemble_cnotab(a, i)) {
+    if (!assemble_cnotab(a, i, size)) {
         return 0;
     }
     if (a->a_offset + size >= len / (int)sizeof(_Py_CODEUNIT)) {
