@@ -597,9 +597,7 @@ tb_displayline(PyTracebackObject* tb, PyObject *f, PyObject *filename, int linen
     }
     
 done:
-    if (source_line) {
-        Py_DECREF(source_line);
-    }
+    Py_XDECREF(source_line);
     return err;
 }
 
@@ -1003,4 +1001,3 @@ _Py_DumpTracebackThreads(int fd, PyInterpreterState *interp,
 
     return NULL;
 }
-
