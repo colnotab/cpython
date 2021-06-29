@@ -1430,8 +1430,9 @@ class TestTracebackException(unittest.TestCase):
         output = StringIO()
         exc.print(file=output)
         self.assertEqual(
-            output.getvalue().split('\n')[-4:],
+            output.getvalue().split('\n')[-5:],
             ['    x/0',
+             '    ^^^',
              '    x = 12',
              'ZeroDivisionError: division by zero',
              ''])
