@@ -164,7 +164,7 @@ PyDoc_STRVAR(code_replace__doc__,
 "        co_flags=-1, co_firstlineno=-1, co_code=None, co_consts=None,\n"
 "        co_names=None, co_varnames=None, co_freevars=None,\n"
 "        co_cellvars=None, co_filename=None, co_name=None,\n"
-"        co_linetable=None, co_enotab=None, co_cnotab=None,\n"
+"        co_linetable=None, co_cnotab=None, co_enotab=None,\n"
 "        co_exceptiontable=None)\n"
 "--\n"
 "\n"
@@ -182,14 +182,14 @@ code_replace_impl(PyCodeObject *self, int co_argcount,
                   PyObject *co_varnames, PyObject *co_freevars,
                   PyObject *co_cellvars, PyObject *co_filename,
                   PyObject *co_name, PyBytesObject *co_linetable,
-                  PyBytesObject *co_enotab, PyBytesObject *co_cnotab,
+                  PyBytesObject *co_cnotab, PyBytesObject *co_enotab,
                   PyBytesObject *co_exceptiontable);
 
 static PyObject *
 code_replace(PyCodeObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     PyObject *return_value = NULL;
-    static const char * const _keywords[] = {"co_argcount", "co_posonlyargcount", "co_kwonlyargcount", "co_nlocals", "co_stacksize", "co_flags", "co_firstlineno", "co_code", "co_consts", "co_names", "co_varnames", "co_freevars", "co_cellvars", "co_filename", "co_name", "co_linetable", "co_enotab", "co_cnotab", "co_exceptiontable", NULL};
+    static const char * const _keywords[] = {"co_argcount", "co_posonlyargcount", "co_kwonlyargcount", "co_nlocals", "co_stacksize", "co_flags", "co_firstlineno", "co_code", "co_consts", "co_names", "co_varnames", "co_freevars", "co_cellvars", "co_filename", "co_name", "co_linetable", "co_cnotab", "co_enotab", "co_exceptiontable", NULL};
     static _PyArg_Parser _parser = {NULL, _keywords, "replace", 0};
     PyObject *argsbuf[19];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
@@ -209,8 +209,8 @@ code_replace(PyCodeObject *self, PyObject *const *args, Py_ssize_t nargs, PyObje
     PyObject *co_filename = self->co_filename;
     PyObject *co_name = self->co_name;
     PyBytesObject *co_linetable = (PyBytesObject *)self->co_linetable;
-    PyBytesObject *co_enotab = (PyBytesObject *)self->co_enotab;
     PyBytesObject *co_cnotab = (PyBytesObject *)self->co_cnotab;
+    PyBytesObject *co_enotab = (PyBytesObject *)self->co_enotab;
     PyBytesObject *co_exceptiontable = (PyBytesObject *)self->co_exceptiontable;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser, 0, 0, 0, argsbuf);
@@ -381,20 +381,20 @@ code_replace(PyCodeObject *self, PyObject *const *args, Py_ssize_t nargs, PyObje
     }
     if (args[16]) {
         if (!PyBytes_Check(args[16])) {
-            _PyArg_BadArgument("replace", "argument 'co_enotab'", "bytes", args[16]);
+            _PyArg_BadArgument("replace", "argument 'co_cnotab'", "bytes", args[16]);
             goto exit;
         }
-        co_enotab = (PyBytesObject *)args[16];
+        co_cnotab = (PyBytesObject *)args[16];
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
     if (args[17]) {
         if (!PyBytes_Check(args[17])) {
-            _PyArg_BadArgument("replace", "argument 'co_cnotab'", "bytes", args[17]);
+            _PyArg_BadArgument("replace", "argument 'co_enotab'", "bytes", args[17]);
             goto exit;
         }
-        co_cnotab = (PyBytesObject *)args[17];
+        co_enotab = (PyBytesObject *)args[17];
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
@@ -405,9 +405,46 @@ code_replace(PyCodeObject *self, PyObject *const *args, Py_ssize_t nargs, PyObje
     }
     co_exceptiontable = (PyBytesObject *)args[18];
 skip_optional_kwonly:
-    return_value = code_replace_impl(self, co_argcount, co_posonlyargcount, co_kwonlyargcount, co_nlocals, co_stacksize, co_flags, co_firstlineno, co_code, co_consts, co_names, co_varnames, co_freevars, co_cellvars, co_filename, co_name, co_linetable, co_enotab, co_cnotab, co_exceptiontable);
+    return_value = code_replace_impl(self, co_argcount, co_posonlyargcount, co_kwonlyargcount, co_nlocals, co_stacksize, co_flags, co_firstlineno, co_code, co_consts, co_names, co_varnames, co_freevars, co_cellvars, co_filename, co_name, co_linetable, co_cnotab, co_enotab, co_exceptiontable);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=f2a9827e4aad3b2f input=a9049054013a1b77]*/
+
+PyDoc_STRVAR(code__varname_from_oparg__doc__,
+"_varname_from_oparg($self, /, oparg)\n"
+"--\n"
+"\n"
+"(internal-only) Return the local variable name for the given oparg.\n"
+"\n"
+"WARNING: this method is for internal use only and may change or go away.");
+
+#define CODE__VARNAME_FROM_OPARG_METHODDEF    \
+    {"_varname_from_oparg", (PyCFunction)(void(*)(void))code__varname_from_oparg, METH_FASTCALL|METH_KEYWORDS, code__varname_from_oparg__doc__},
+
+static PyObject *
+code__varname_from_oparg_impl(PyCodeObject *self, int oparg);
+
+static PyObject *
+code__varname_from_oparg(PyCodeObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+{
+    PyObject *return_value = NULL;
+    static const char * const _keywords[] = {"oparg", NULL};
+    static _PyArg_Parser _parser = {NULL, _keywords, "_varname_from_oparg", 0};
+    PyObject *argsbuf[1];
+    int oparg;
+
+    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser, 1, 1, 0, argsbuf);
+    if (!args) {
+        goto exit;
+    }
+    oparg = _PyLong_AsInt(args[0]);
+    if (oparg == -1 && PyErr_Occurred()) {
+        goto exit;
+    }
+    return_value = code__varname_from_oparg_impl(self, oparg);
+
+exit:
+    return return_value;
+}
+/*[clinic end generated code: output=803495e0bf0f000e input=a9049054013a1b77]*/
