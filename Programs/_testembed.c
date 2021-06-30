@@ -528,7 +528,7 @@ static int test_init_from_config(void)
     putenv("PYTHONPROFILEIMPORTTIME=0");
     config.import_time = 1;
 
-    putenv("PYDEACTIVATEDEBUGRANGES=0");
+    putenv("PYTHONNODEBUGRANGES=0");
     config.deactivate_debug_ranges = 1;
 
     config.show_ref_count = 1;
@@ -689,7 +689,7 @@ static void set_most_env_vars(void)
     putenv("PYTHONMALLOC=malloc");
     putenv("PYTHONTRACEMALLOC=2");
     putenv("PYTHONPROFILEIMPORTTIME=1");
-    putenv("PYDEACTIVATEDEBUGRANGES=1");
+    putenv("PYTHONNODEBUGRANGES=1");
     putenv("PYTHONMALLOCSTATS=1");
     putenv("PYTHONUTF8=1");
     putenv("PYTHONVERBOSE=1");

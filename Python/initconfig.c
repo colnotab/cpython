@@ -1806,7 +1806,7 @@ config_read_complex_options(PyConfig *config)
         config->import_time = 1;
     }
 
-    if (config_get_env(config, "PYDEACTIVATEDEBUGRANGES")
+    if (config_get_env(config, "PYTHONNODEBUGRANGES")
        || config_get_xoption(config, L"nodebugranges")) {
         config->deactivate_debug_ranges = 1;
     }
